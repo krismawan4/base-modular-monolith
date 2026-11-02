@@ -1,6 +1,28 @@
 version: '3.9'
 
 services:
+  # ── PostgreSQL Database ──────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: modular_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: modular_monolith
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./docker/postgreSQL:/var/lib/postgresql/data
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d modular_monolith"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # ── Rust Backend (Axum) ──────────────────────────────────────
   backend:
     build:
@@ -10,13 +32,19 @@ services:
     restart: unless-stopped
     environment:
       RUST_LOG: info
+      HOST: "0.0.0.0"
+      PORT: "8000"
+      DATABASE_URL: postgres://postgres:password@postgres:5432/modular_monolith
     ports:
-      - "3000:3000"   # HTTP REST (Axum)
+      - "8000:8000"   # HTTP REST (Axum)
       # - "50051:50051" # gRPC (aktifkan saat Tonic siap)
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - app_network
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/auth/validate-token"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8000/"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -39,4 +67,3 @@ services:
 networks:
   app_network:
     driver: bridge
-

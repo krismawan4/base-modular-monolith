@@ -51,7 +51,7 @@ WORKDIR /app
 COPY --from=builder /app/target/release/app ./app
 
 ENV RUST_LOG=info
-EXPOSE 3000
+EXPOSE 8000
 
 CMD ["./app"]
 

@@ -91,6 +91,8 @@ secrets.toml
 # =============================================================================
 
 docker-compose.override.yml
+docker/postgreSQL/*
+!docker/postgreSQL/.gitkeep
 
 # =============================================================================
 # Frontend / Node.js

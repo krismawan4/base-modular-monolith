@@ -1,82 +1,126 @@
-//! # In-Memory Repository
+//! # Auth Repository (PostgreSQL & In-Memory)
 //!
-//! Menyimpan `User`, `Role`, dan `Permission` di dalam HashMap yang dilindungi
-//! `RwLock`. Penggunaan `RwLock` (bukan `Mutex`) memungkinkan banyak pembaca
-//! bersamaan sambil tetap menjamin eksklusivitas saat ada penulis — cocok untuk
-//! workload baca-dominan seperti validasi token.
+//! Menyimpan `User`, `Role`, dan `Permission` baik di PostgreSQL (via `sqlx`)
+//! maupun In-Memory (via `HashMap` + `RwLock` untuk pengujian).
 //!
-//! **Catatan:** Seluruh struct di file ini bersifat `pub(crate)`.
-//! Mereka tidak boleh bocor ke luar batas crate `auth`.
+//! Seluruh struct di file ini bersifat `pub(crate)` dan tidak bocor ke luar crate `auth`.
 
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
 };
+
+use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
 // Tipe Data Internal (BUKAN DTO publik)
 // ---------------------------------------------------------------------------
 
-/// Representasi Permission di dalam store.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct Permission {
     pub(crate) name: String,
 }
 
-/// Representasi Role di dalam store.
 #[derive(Debug, Clone)]
 pub(crate) struct Role {
     pub(crate) name:        String,
     pub(crate) permissions: Vec<Permission>,
 }
 
-/// Representasi User di dalam store.
 #[derive(Debug, Clone)]
 pub(crate) struct User {
     pub(crate) id:        String,
     pub(crate) email:     String,
     pub(crate) role_name: String,
-    /// Token simulasi — dalam produksi diganti JWT yang sesungguhnya.
-    /// Disimpan di store untuk lookup via `token_index`.
     #[allow(dead_code)]
     pub(crate) token:     String,
 }
 
 // ---------------------------------------------------------------------------
-// Store (data container di balik RwLock)
+// In-Memory Store
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Default)]
-struct Store {
-    /// Kunci: user ID.
-    users: HashMap<String, User>,
-    /// Kunci: email (untuk deteksi duplikat).
+pub(crate) struct Store {
+    users:       HashMap<String, User>,
     email_index: HashMap<String, String>,
-    /// Kunci: token string (untuk validasi cepat O(1)).
     token_index: HashMap<String, String>,
-    /// Kunci: role name.
-    roles: HashMap<String, Role>,
+    roles:       HashMap<String, Role>,
 }
 
 // ---------------------------------------------------------------------------
 // Repository
 // ---------------------------------------------------------------------------
 
-/// Repository tunggal yang memegang semua data in-memory.
-///
-/// Dibungkus `Arc` agar bisa di-share ke banyak thread (Tokio worker threads).
 #[derive(Debug, Clone)]
-pub(crate) struct AuthRepository {
-    store: Arc<RwLock<Store>>,
+pub(crate) enum AuthRepository {
+    Postgres(PgPool),
+    InMemory(Arc<RwLock<Store>>),
+}
+
+/// Menyiapkan skema database (tabel dan default seed) jika belum ada.
+async fn init_db(pool: &PgPool) -> Result<(), sqlx::Error> {
+    let statements = [
+        r#"
+        CREATE TABLE IF NOT EXISTS roles (
+            name VARCHAR(50) PRIMARY KEY
+        );
+        "#,
+        r#"
+        CREATE TABLE IF NOT EXISTS permissions (
+            name VARCHAR(100) PRIMARY KEY
+        );
+        "#,
+        r#"
+        CREATE TABLE IF NOT EXISTS role_permissions (
+            role_name VARCHAR(50) NOT NULL REFERENCES roles(name) ON DELETE CASCADE,
+            permission_name VARCHAR(100) NOT NULL REFERENCES permissions(name) ON DELETE CASCADE,
+            PRIMARY KEY (role_name, permission_name)
+        );
+        "#,
+        r#"
+        CREATE TABLE IF NOT EXISTS users (
+            id VARCHAR(36) PRIMARY KEY,
+            email VARCHAR(255) UNIQUE NOT NULL,
+            role_name VARCHAR(50) NOT NULL REFERENCES roles(name),
+            token VARCHAR(255) UNIQUE NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        "#,
+        r#"
+        INSERT INTO roles (name) VALUES ('admin'), ('member') ON CONFLICT DO NOTHING;
+        "#,
+        r#"
+        INSERT INTO permissions (name) VALUES ('user:read'), ('user:write') ON CONFLICT DO NOTHING;
+        "#,
+        r#"
+        INSERT INTO role_permissions (role_name, permission_name) VALUES 
+            ('admin', 'user:read'),
+            ('admin', 'user:write'),
+            ('member', 'user:read')
+        ON CONFLICT DO NOTHING;
+        "#,
+    ];
+
+    for stmt in statements {
+        sqlx::query(stmt).execute(pool).await?;
+    }
+
+    Ok(())
 }
 
 impl AuthRepository {
-    /// Membuat instance baru dengan seed data role default.
-    pub(crate) fn new() -> Self {
+    /// Membuat repository berbasis PostgreSQL.
+    pub(crate) async fn from_pool(pool: PgPool) -> Result<Self, sqlx::Error> {
+        init_db(&pool).await?;
+        Ok(Self::Postgres(pool))
+    }
+
+    /// Membuat repository berbasis in-memory (berguna untuk unit test).
+    pub(crate) fn new_in_memory() -> Self {
         let mut store = Store::default();
 
-        // Seed: dua role dasar agar sistem langsung bisa diuji.
         store.roles.insert(
             "admin".to_string(),
             Role {
@@ -95,110 +139,217 @@ impl AuthRepository {
             },
         );
 
-        Self {
-            store: Arc::new(RwLock::new(store)),
-        }
+        Self::InMemory(Arc::new(RwLock::new(store)))
     }
 
-    // -----------------------------------------------------------------------
-    // User CRUD
-    // -----------------------------------------------------------------------
-
-    /// Menyimpan user baru. Mengembalikan `Err` jika email sudah ada atau
-    /// role tidak dikenal.
-    pub(crate) fn create_user(
+    /// Menyimpan user baru.
+    pub(crate) async fn create_user(
         &self,
         email:     &str,
         role_name: &str,
     ) -> Result<User, CreateUserError> {
-        let mut store = self
-            .store
-            .write()
-            .expect("auth store RwLock poisoned");
+        match self {
+            Self::Postgres(pool) => {
+                let role_exists = sqlx::query("SELECT 1 FROM roles WHERE name = $1")
+                    .bind(role_name)
+                    .fetch_optional(pool)
+                    .await
+                    .map_err(|e| CreateUserError::Database(e.to_string()))?;
 
-        if !store.roles.contains_key(role_name) {
-            return Err(CreateUserError::RoleNotFound);
+                if role_exists.is_none() {
+                    return Err(CreateUserError::RoleNotFound);
+                }
+
+                let id    = Uuid::new_v4().to_string();
+                let token = Uuid::new_v4().to_string();
+
+                let res = sqlx::query(
+                    "INSERT INTO users (id, email, role_name, token) VALUES ($1, $2, $3, $4)",
+                )
+                .bind(&id)
+                .bind(email)
+                .bind(role_name)
+                .bind(&token)
+                .execute(pool)
+                .await;
+
+                match res {
+                    Ok(_) => Ok(User {
+                        id,
+                        email: email.to_string(),
+                        role_name: role_name.to_string(),
+                        token,
+                    }),
+                    Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+                        Err(CreateUserError::DuplicateEmail)
+                    }
+                    Err(e) => Err(CreateUserError::Database(e.to_string())),
+                }
+            }
+            Self::InMemory(store) => {
+                let mut store = store.write().expect("auth store RwLock poisoned");
+
+                if !store.roles.contains_key(role_name) {
+                    return Err(CreateUserError::RoleNotFound);
+                }
+                if store.email_index.contains_key(email) {
+                    return Err(CreateUserError::DuplicateEmail);
+                }
+
+                let id    = Uuid::new_v4().to_string();
+                let token = Uuid::new_v4().to_string();
+
+                let user = User {
+                    id:        id.clone(),
+                    email:     email.to_string(),
+                    role_name: role_name.to_string(),
+                    token:     token.clone(),
+                };
+
+                store.users.insert(id.clone(), user.clone());
+                store.email_index.insert(email.to_string(), id.clone());
+                store.token_index.insert(token, id);
+
+                Ok(user)
+            }
         }
-        if store.email_index.contains_key(email) {
-            return Err(CreateUserError::DuplicateEmail);
+    }
+
+    /// Mengambil user berdasarkan ID.
+    pub(crate) async fn find_user_by_id(&self, user_id: &str) -> Result<Option<User>, sqlx::Error> {
+        match self {
+            Self::Postgres(pool) => {
+                let row = sqlx::query("SELECT id, email, role_name, token FROM users WHERE id = $1")
+                    .bind(user_id)
+                    .fetch_optional(pool)
+                    .await?;
+
+                Ok(row.map(|r| User {
+                    id:        r.get("id"),
+                    email:     r.get("email"),
+                    role_name: r.get("role_name"),
+                    token:     r.get("token"),
+                }))
+            }
+            Self::InMemory(store) => {
+                let store = store.read().expect("auth store RwLock poisoned");
+                Ok(store.users.get(user_id).cloned())
+            }
         }
-
-        let id    = Uuid::new_v4().to_string();
-        let token = Uuid::new_v4().to_string(); // simulasi opaque token
-
-        let user = User {
-            id:        id.clone(),
-            email:     email.to_string(),
-            role_name: role_name.to_string(),
-            token:     token.clone(),
-        };
-
-        store.users.insert(id.clone(), user.clone());
-        store.email_index.insert(email.to_string(), id.clone());
-        store.token_index.insert(token, id);
-
-        Ok(user)
     }
 
-    /// Mengambil user berdasarkan ID. Mengembalikan `None` jika tidak ada.
-    pub(crate) fn find_user_by_id(&self, user_id: &str) -> Option<User> {
-        let store = self
-            .store
-            .read()
-            .expect("auth store RwLock poisoned");
-        store.users.get(user_id).cloned()
+    /// Menemukan user berdasarkan token.
+    pub(crate) async fn find_user_by_token(&self, token: &str) -> Result<Option<User>, sqlx::Error> {
+        match self {
+            Self::Postgres(pool) => {
+                let row = sqlx::query("SELECT id, email, role_name, token FROM users WHERE token = $1")
+                    .bind(token)
+                    .fetch_optional(pool)
+                    .await?;
+
+                Ok(row.map(|r| User {
+                    id:        r.get("id"),
+                    email:     r.get("email"),
+                    role_name: r.get("role_name"),
+                    token:     r.get("token"),
+                }))
+            }
+            Self::InMemory(store) => {
+                let store = store.read().expect("auth store RwLock poisoned");
+                let Some(user_id) = store.token_index.get(token) else {
+                    return Ok(None);
+                };
+                Ok(store.users.get(user_id).cloned())
+            }
+        }
     }
 
-    /// Menemukan user berdasarkan token. Mengembalikan `None` jika tidak valid.
-    pub(crate) fn find_user_by_token(&self, token: &str) -> Option<User> {
-        let store = self
-            .store
-            .read()
-            .expect("auth store RwLock poisoned");
-        let user_id = store.token_index.get(token)?;
-        store.users.get(user_id).cloned()
-    }
+    /// Mengambil role berdasarkan nama beserta permissions-nya.
+    pub(crate) async fn find_role_by_name(&self, role_name: &str) -> Result<Option<Role>, sqlx::Error> {
+        match self {
+            Self::Postgres(pool) => {
+                let role_row = sqlx::query("SELECT name FROM roles WHERE name = $1")
+                    .bind(role_name)
+                    .fetch_optional(pool)
+                    .await?;
 
-    // -----------------------------------------------------------------------
-    // Role & Permission
-    // -----------------------------------------------------------------------
+                if role_row.is_none() {
+                    return Ok(None);
+                }
 
-    /// Mengambil role berdasarkan nama. Mengembalikan `None` jika tidak ada.
-    pub(crate) fn find_role_by_name(&self, role_name: &str) -> Option<Role> {
-        let store = self
-            .store
-            .read()
-            .expect("auth store RwLock poisoned");
-        store.roles.get(role_name).cloned()
+                let perm_rows = sqlx::query(
+                    "SELECT permission_name FROM role_permissions WHERE role_name = $1",
+                )
+                .bind(role_name)
+                .fetch_all(pool)
+                .await?;
+
+                let permissions = perm_rows
+                    .into_iter()
+                    .map(|r| Permission {
+                        name: r.get("permission_name"),
+                    })
+                    .collect();
+
+                Ok(Some(Role {
+                    name: role_name.to_string(),
+                    permissions,
+                }))
+            }
+            Self::InMemory(store) => {
+                let store = store.read().expect("auth store RwLock poisoned");
+                Ok(store.roles.get(role_name).cloned())
+            }
+        }
     }
 
     /// Menambahkan permission ke role. Idempotent.
-    /// Mengembalikan `false` jika role tidak ditemukan.
-    pub(crate) fn add_permission_to_role(
+    pub(crate) async fn add_permission_to_role(
         &self,
         role_name:       &str,
         permission_name: &str,
-    ) -> bool {
-        let mut store = self
-            .store
-            .write()
-            .expect("auth store RwLock poisoned");
+    ) -> Result<bool, sqlx::Error> {
+        match self {
+            Self::Postgres(pool) => {
+                let role_exists = sqlx::query("SELECT 1 FROM roles WHERE name = $1")
+                    .bind(role_name)
+                    .fetch_optional(pool)
+                    .await?;
 
-        let Some(role) = store.roles.get_mut(role_name) else {
-            return false;
-        };
+                if role_exists.is_none() {
+                    return Ok(false);
+                }
 
-        let already_exists = role
-            .permissions
-            .iter()
-            .any(|p| p.name == permission_name);
+                sqlx::query("INSERT INTO permissions (name) VALUES ($1) ON CONFLICT DO NOTHING")
+                    .bind(permission_name)
+                    .execute(pool)
+                    .await?;
 
-        if !already_exists {
-            role.permissions
-                .push(Permission { name: permission_name.to_string() });
+                sqlx::query(
+                    "INSERT INTO role_permissions (role_name, permission_name) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                )
+                .bind(role_name)
+                .bind(permission_name)
+                .execute(pool)
+                .await?;
+
+                Ok(true)
+            }
+            Self::InMemory(store) => {
+                let mut store = store.write().expect("auth store RwLock poisoned");
+                let Some(role) = store.roles.get_mut(role_name) else {
+                    return Ok(false);
+                };
+
+                let already_exists = role.permissions.iter().any(|p| p.name == permission_name);
+                if !already_exists {
+                    role.permissions.push(Permission {
+                        name: permission_name.to_string(),
+                    });
+                }
+                Ok(true)
+            }
         }
-
-        true
     }
 }
 
@@ -210,5 +361,5 @@ impl AuthRepository {
 pub(crate) enum CreateUserError {
     RoleNotFound,
     DuplicateEmail,
+    Database(String),
 }
-

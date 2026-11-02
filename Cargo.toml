@@ -11,4 +11,5 @@ async-trait = "0.1"
 serde       = { version = "1", features = ["derive"] }
 uuid        = { version = "1", features = ["v4"] }
 axum        = { version = "0.7", features = ["json"] }
+sqlx        = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "macros"] }
 

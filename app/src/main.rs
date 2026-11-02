@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use auth::build_client;
+use auth::{build_client, build_in_memory_client};
 use axum::{routing::get, Json, Router};
 use serde_json::{json, Value};
 use tower_http::cors::{Any, CorsLayer};
@@ -23,8 +23,31 @@ async fn main() {
         )
         .init();
 
-    // Bootstrap DynAuthClient — satu instance, di-share via Arc
-    let auth_client = build_client();
+    // Koneksi Database PostgreSQL via sqlx
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgres://postgres:password@127.0.0.1:5432/modular_monolith".to_string()
+    });
+
+    let auth_client = match sqlx::postgres::PgPoolOptions::new()
+        .max_connections(5)
+        .acquire_timeout(std::time::Duration::from_secs(3))
+        .connect(&database_url)
+        .await
+    {
+        Ok(pool) => {
+            tracing::info!("Terhubung ke database PostgreSQL di {database_url}");
+            build_client(pool)
+                .await
+                .expect("Gagal menginisialisasi skema database Auth")
+        }
+        Err(err) => {
+            tracing::warn!(
+                "Tidak dapat terhubung ke PostgreSQL ({err}). Menjalankan dengan in-memory store sebagai fallback..."
+            );
+            tracing::info!("Tip: Jalankan `docker compose up -d postgres` untuk mengaktifkan database.");
+            build_in_memory_client()
+        }
+    };
 
     // Middleware CORS — izinkan frontend Astro (localhost:4321) saat dev
     let cors = CorsLayer::new()
@@ -39,7 +62,14 @@ async fn main() {
         .layer(cors)
         .layer(TraceLayer::new_for_http());
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8000));
+    let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let port: u16 = std::env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(8000);
+    let addr: SocketAddr = format!("{host}:{port}")
+        .parse()
+        .expect("Format HOST:PORT tidak valid");
     tracing::info!("HTTP server listening on http://{addr}");
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();

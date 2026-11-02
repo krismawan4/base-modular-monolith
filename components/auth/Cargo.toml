@@ -10,4 +10,5 @@ uuid        = { workspace = true }
 serde       = { workspace = true }
 axum        = { version = "0.7", features = ["json"] }
 serde_json  = "1"
+sqlx        = { workspace = true }
 

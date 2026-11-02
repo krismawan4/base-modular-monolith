@@ -97,19 +97,21 @@ pub trait AuthClient: Send + Sync {
 pub type DynAuthClient = Arc<dyn AuthClient>;
 
 // ---------------------------------------------------------------------------
-// Factory Function (satu-satunya pintu masuk ke implementasi internal)
+// Factory Functions (pintu masuk ke implementasi internal)
 // ---------------------------------------------------------------------------
 
-/// Membangun instance `AuthClient` yang siap dipakai.
+/// Membangun instance `AuthClient` menggunakan PostgreSQL connection pool.
 ///
-/// Dipanggil sekali di `app/src/main.rs` saat bootstrap aplikasi,
-/// hasilnya dibungkus `Arc` dan disebar via Axum State / Tonic extension.
-///
-/// ```rust,ignore
-/// let auth: DynAuthClient = auth::build_client();
-/// ```
-pub fn build_client() -> DynAuthClient {
-    internal::service::AuthService::new_arc()
+/// Dipanggil di `app/src/main.rs` saat bootstrap aplikasi dengan `sqlx::PgPool`.
+pub async fn build_client(pool: sqlx::PgPool) -> Result<DynAuthClient, AuthError> {
+    internal::service::AuthService::new_pg(pool)
+        .await
+        .map_err(|e| AuthError::Internal(e.to_string()))
+}
+
+/// Membangun instance `AuthClient` in-memory (berguna untuk testing atau fallback dev).
+pub fn build_in_memory_client() -> DynAuthClient {
+    internal::service::AuthService::new_in_memory()
 }
 
 // ---------------------------------------------------------------------------
