@@ -1,0 +1,42 @@
+version: '3.9'
+
+services:
+  # ── Rust Backend (Axum) ──────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    container_name: modular_backend
+    restart: unless-stopped
+    environment:
+      RUST_LOG: info
+    ports:
+      - "3000:3000"   # HTTP REST (Axum)
+      # - "50051:50051" # gRPC (aktifkan saat Tonic siap)
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/auth/validate-token"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ── Frontend (Astro → Nginx) ─────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    container_name: modular_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"       # Web
+    depends_on:
+      - backend
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge
+

@@ -1,34 +1,43 @@
-//! Titik masuk aplikasi utama.
-//!
-//! Di sinilah Axum HTTP server dan Tonic gRPC server akan dijalankan
-//! secara bersamaan menggunakan `tokio::select!`.
-//!
-//! Untuk saat ini file ini hanya mendemonstrasikan cara menggunakan
-//! `DynAuthClient` yang dibangun dari crate `auth`.
+use std::net::SocketAddr;
 
-use auth::{DynAuthClient, build_client};
+use auth::build_client;
+use axum::Router;
+use tower_http::cors::{Any, CorsLayer};
+use tower_http::trace::TraceLayer;
 
 #[tokio::main]
 async fn main() {
-    let auth_client: DynAuthClient = build_client();
+    // Inisialisasi logging
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
+        )
+        .init();
 
-    // Demonstrasi: buat user dan validasi
-    let user = auth_client
-        .create_user("admin@example.com", "admin")
-        .await
-        .expect("create_user failed");
+    // Bootstrap DynAuthClient — satu instance, di-share via Arc
+    let auth_client = build_client();
 
-    println!("Created user: {:?}", user);
+    // Middleware CORS — izinkan frontend Astro (localhost:4321) saat dev
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
 
-    // TODO: pasang Axum Router + Tonic gRPC server di sini
-    //
-    // let http_app = Router::new()
-    //     .merge(auth_routes())
-    //     .with_state(auth_client.clone());
-    //
+    // Rakit router utama dengan merge pattern sesuai gemini.md
+    let app = Router::new()
+        .merge(auth::http::auth_routes(auth_client))
+        .layer(cors)
+        .layer(TraceLayer::new_for_http());
+
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+    tracing::info!("HTTP server listening on {addr}");
+
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    axum::serve(listener, app).await.unwrap();
+
+    // TODO (Step 4): jalankan Tonic gRPC server serentak via tokio::select!
     // tokio::select! {
-    //     _ = axum_serve(http_app)  => {},
-    //     _ = tonic_serve(auth_client) => {},
+    //     _ = axum::serve(listener, app)    => {},
+    //     _ = grpc::serve(auth_client_grpc) => {},
     // }
 }
-

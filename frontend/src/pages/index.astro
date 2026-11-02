@@ -1,0 +1,146 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="ModularBase — Enterprise Rust Platform">
+  <!-- ── Navbar ── -->
+  <header class="sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur">
+    <div class="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+      <div class="flex items-center gap-2">
+        <span class="text-xl font-bold tracking-tight">⬡ ModularBase</span>
+      </div>
+      <nav class="hidden items-center gap-8 text-sm font-medium text-muted-foreground md:flex">
+        <a href="#features" class="hover:text-foreground transition-colors">Fitur</a>
+        <a href="#stack"    class="hover:text-foreground transition-colors">Tech Stack</a>
+        <a href="#docs"     class="hover:text-foreground transition-colors">Docs</a>
+      </nav>
+      <div class="flex items-center gap-3">
+        <a
+          href="/admin"
+          class="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 transition-colors"
+        >
+          Dashboard Admin →
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- ── Hero ── -->
+    <section class="mx-auto max-w-6xl px-6 py-28 text-center">
+      <div class="mb-4 inline-flex items-center rounded-full border bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+        🦀 Dibangun dengan Rust + Axum
+      </div>
+      <h1 class="mt-4 text-5xl font-bold leading-tight tracking-tight md:text-6xl">
+        Fondasi Arsitektur<br />
+        <span class="bg-gradient-to-r from-slate-800 to-slate-500 bg-clip-text text-transparent">
+          Modular Monolith
+        </span>
+      </h1>
+      <p class="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
+        Boilerplate enterprise berbasis <strong>Cargo Workspaces</strong>, dengan isolasi modul
+        setara Microservices namun tanpa kompleksitas infrastruktur. Siap scale ke gRPC kapan saja.
+      </p>
+      <div class="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+        <a
+          href="/admin"
+          class="inline-flex h-11 items-center rounded-md bg-primary px-8 text-sm font-semibold text-primary-foreground shadow hover:bg-primary/90 transition-colors"
+        >
+          Buka Admin Panel
+        </a>
+        <a
+          href="https://github.com"
+          class="inline-flex h-11 items-center rounded-md border px-8 text-sm font-semibold shadow-sm hover:bg-accent transition-colors"
+        >
+          Lihat Source Code
+        </a>
+      </div>
+    </section>
+
+    <!-- ── Stats ── -->
+    <section class="border-y bg-muted/40 py-12">
+      <div class="mx-auto grid max-w-6xl grid-cols-2 gap-8 px-6 md:grid-cols-4">
+        {[
+          { value: '<5ms',  label: 'Latency In-Memory' },
+          { value: '<30MB', label: 'RAM Idle Usage' },
+          { value: '2',     label: 'Protocol (REST + gRPC)' },
+          { value: '100%',  label: 'Type-safe (Rust)' },
+        ].map(stat => (
+          <div class="text-center">
+            <div class="text-3xl font-bold">{stat.value}</div>
+            <div class="mt-1 text-sm text-muted-foreground">{stat.label}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- ── Features ── -->
+    <section id="features" class="mx-auto max-w-6xl px-6 py-24">
+      <h2 class="mb-12 text-center text-3xl font-bold">Fitur Utama</h2>
+      <div class="grid gap-6 md:grid-cols-3">
+        {[
+          {
+            icon:  '🔐',
+            title: 'RBAC Auth',
+            desc:  'Role-Based Access Control bawaan. User, Role, dan Permission diisolasi penuh dalam crate `auth` menggunakan trait publik.',
+          },
+          {
+            icon:  '📦',
+            title: 'Cargo Workspaces',
+            desc:  'Setiap domain bisnis menjadi crate independen. Pelanggaran batas modul langsung ditolak compiler pada waktu kompilasi.',
+          },
+          {
+            icon:  '⚡',
+            title: 'Dual Protocol',
+            desc:  'Axum HTTP REST untuk client-facing API. Tonic gRPC disiapkan untuk komunikasi antar-layanan dan migrasi Microservice.',
+          },
+          {
+            icon:  '🛡️',
+            title: 'Memory Safe',
+            desc:  'Zero null pointer, zero data race. Rust ownership system menjamin keamanan memori tanpa garbage collector.',
+          },
+          {
+            icon:  '🔄',
+            title: 'CQRS Ready',
+            desc:  'Arsitektur siap untuk pemisahan jalur baca/tulis. Command dan Query dapat dipisah tanpa merombak struktur modul.',
+          },
+          {
+            icon:  '🐳',
+            title: 'Docker Ready',
+            desc:  'Multi-stage Dockerfile untuk backend Rust dan frontend Astro. Siap deploy ke container environment mana pun.',
+          },
+        ].map(f => (
+          <div class="rounded-xl border bg-card p-6 shadow-sm">
+            <div class="mb-3 text-3xl">{f.icon}</div>
+            <h3 class="mb-2 font-semibold">{f.title}</h3>
+            <p class="text-sm text-muted-foreground">{f.desc}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- ── Tech Stack ── -->
+    <section id="stack" class="border-t bg-muted/40 py-20">
+      <div class="mx-auto max-w-6xl px-6">
+        <h2 class="mb-10 text-center text-3xl font-bold">Tech Stack</h2>
+        <div class="flex flex-wrap justify-center gap-3">
+          {[
+            'Rust 2021', 'Tokio', 'Axum 0.7', 'Tonic gRPC',
+            'Cargo Workspaces', 'Astro 4', 'React 18', 'shadcn/ui',
+            'Tailwind CSS', 'Docker', 'Nginx',
+          ].map(tech => (
+            <span class="rounded-full border bg-white px-4 py-1.5 text-sm font-medium shadow-sm">
+              {tech}
+            </span>
+          ))}
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ── Footer ── -->
+  <footer class="border-t py-8 text-center text-sm text-muted-foreground">
+    <p>© 2026 ModularBase. Blueprint arsitektur Rust — open source.</p>
+  </footer>
+</Layout>
+
