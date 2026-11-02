@@ -1,9 +1,18 @@
 use std::net::SocketAddr;
 
 use auth::build_client;
-use axum::Router;
+use axum::{routing::get, Json, Router};
+use serde_json::{json, Value};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
+
+async fn root() -> Json<Value> {
+    Json(json!({
+        "status": "ok",
+        "service": "modular-monolith-api",
+        "version": env!("CARGO_PKG_VERSION")
+    }))
+}
 
 #[tokio::main]
 async fn main() {
@@ -25,12 +34,13 @@ async fn main() {
 
     // Rakit router utama dengan merge pattern sesuai gemini.md
     let app = Router::new()
+        .route("/", get(root))
         .merge(auth::http::auth_routes(auth_client))
         .layer(cors)
         .layer(TraceLayer::new_for_http());
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8000));
-    tracing::info!("HTTP server listening on {addr}");
+    tracing::info!("HTTP server listening on http://{addr}");
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();

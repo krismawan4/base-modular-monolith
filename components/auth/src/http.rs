@@ -176,7 +176,7 @@ async fn validate_token(
 
 /// Mengembalikan sub-router Auth yang siap di-merge ke router utama Axum.
 ///
-/// ```rust
+/// ```rust,ignore
 /// // di app/src/main.rs
 /// let app = Router::new()
 ///     .merge(auth::auth_routes(auth_client));

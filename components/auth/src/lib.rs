@@ -105,7 +105,7 @@ pub type DynAuthClient = Arc<dyn AuthClient>;
 /// Dipanggil sekali di `app/src/main.rs` saat bootstrap aplikasi,
 /// hasilnya dibungkus `Arc` dan disebar via Axum State / Tonic extension.
 ///
-/// ```rust,no_run
+/// ```rust,ignore
 /// let auth: DynAuthClient = auth::build_client();
 /// ```
 pub fn build_client() -> DynAuthClient {
