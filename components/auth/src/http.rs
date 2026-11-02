@@ -13,7 +13,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{AuthError, DynAuthClient, PermissionDto, RoleDto, UserDto};
+use crate::{AuthError, DynAuthClient, UserDto};
 
 // ---------------------------------------------------------------------------
 // Response shapes (JSON-serializable wrappers atas DTO publik)

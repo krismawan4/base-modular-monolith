@@ -38,6 +38,8 @@ pub(crate) struct User {
     pub(crate) email:     String,
     pub(crate) role_name: String,
     /// Token simulasi — dalam produksi diganti JWT yang sesungguhnya.
+    /// Disimpan di store untuk lookup via `token_index`.
+    #[allow(dead_code)]
     pub(crate) token:     String,
 }
 
