@@ -29,7 +29,7 @@ async fn main() {
         .layer(cors)
         .layer(TraceLayer::new_for_http());
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+    let addr = SocketAddr::from(([127, 0, 0, 1], 8000));
     tracing::info!("HTTP server listening on {addr}");
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
