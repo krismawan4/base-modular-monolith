@@ -1,0 +1,24 @@
+Bertindaklah sebagai Senior Software Architect Rust. Saya ingin mengimplementasikan modul `auth` untuk proyek dasar dengan arsitektur Modular Monolith menggunakan Cargo Workspaces, Axum, dan Tonic gRPC sesuai dengan cetak biru yang ada di prd.md dan gemini.md.
+
+Tolong buatkan kode lengkap untuk komponen `components/auth/` dengan spesifikasi sebagai berikut:
+
+1. Buat struktur folder internal yang rapi:
+   - `components/auth/Cargo.toml`
+   - `components/auth/src/lib.rs` (Kontrak Publik & Trait)
+   - `components/auth/src/internal/mod.rs`
+   - `components/auth/src/internal/repository.rs` (Simulasi DB In-Memory CRUD)
+   - `components/auth/src/internal/service.rs` (Logika Bisnis & Implementasi Trait)
+
+2. Detail Fitur CRUD & RBAC yang harus diimplementasikan:
+   - Create User (Menyimpan User baru dengan Role tertentu).
+   - Get User by ID.
+   - Assign Permission to Role (Menambahkan permission baru ke dalam role secara dinamis).
+   - Validate Token (Simulasi pencocokan token/JWT string untuk mengembalikan objek UserDto lengkap dengan hak akses permissions miliknya).
+
+3. Aturan Kode Rust:
+   - Gunakan `#[async_trait]` untuk semua trait dan implementasi yang bersifat asinkronus.
+   - Gunakan tipe data thread-safe (`Mutex` atau `RwLock` dari `std::sync`) pada repository in-memory agar aman diakses oleh multi-threading Tokio runtime di layer Axum/Tonic.
+   - Sembunyikan detail implementasi internal (folder internal harus private dan tidak boleh bocor keluar melalui lib.rs).
+   - Tulis kode yang clean, idiomatic Rust, dan siap dipasang ke workspace utama.
+
+Berikan output dalam bentuk blok kode terpisah untuk masing-masing file agar saya mudah menyalinnya ke dalam struktur direktori proyek saya.
