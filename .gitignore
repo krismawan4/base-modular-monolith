@@ -1,0 +1,94 @@
+# =============================================================================
+# Rust / Cargo
+# =============================================================================
+
+# Build artifacts
+/target/
+**/target/
+
+# Cargo lock file — commit ini untuk binary crate (app), abaikan untuk library
+# Karena proyek ini adalah workspace dengan binary (app) di dalamnya, lock di-commit.
+# Hapus baris berikut jika Anda ingin mengabaikan Cargo.lock:
+# Cargo.lock
+
+# Cargo cache metadata
+.cargo/
+
+# Generated Protobuf / Tonic code (di-generate ulang via build.rs saat compile)
+**/src/generated/
+**/*.pb.rs
+
+# =============================================================================
+# IDE & Editor
+# =============================================================================
+
+# VS Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# JetBrains (RustRover, IntelliJ)
+.idea/
+*.iml
+*.iws
+
+# Vim / Neovim
+*.swp
+*.swo
+Session.vim
+.netrwhist
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# =============================================================================
+# OS
+# =============================================================================
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Linux
+*~
+
+# =============================================================================
+# Environment & Secrets
+# =============================================================================
+
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets.toml
+
+# =============================================================================
+# Logs & Temp
+# =============================================================================
+
+*.log
+*.tmp
+*.bak
+/tmp/
+/logs/
+
+# =============================================================================
+# Docker (untuk deployment di masa depan)
+# =============================================================================
+
+docker-compose.override.yml
+
