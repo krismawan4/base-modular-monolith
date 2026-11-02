@@ -1,0 +1,65 @@
+// proto/order.proto
+//
+// Kontrak gRPC untuk modul Order (placeholder).
+// File ini adalah scaffolding awal — implementasi penuh akan diisi
+// saat modul `components/order` dikembangkan.
+//
+// Sesuai PRD §5 (CQRS Readiness): jalur write dan read akan dipisah
+// saat skala bisnis bertumbuh, dimediasi via Message Broker.
+
+syntax = "proto3";
+
+package order;
+
+// ---------------------------------------------------------------------------
+// Messages
+// ---------------------------------------------------------------------------
+
+message OrderItemProto {
+  string product_id = 1;
+  uint32 quantity   = 2;
+}
+
+message OrderProto {
+  string                   id         = 1;
+  string                   user_id    = 2;
+  repeated OrderItemProto  items      = 3;
+  string                   status     = 4; // e.g. "pending", "paid", "shipped"
+  string                   created_at = 5; // ISO 8601 string
+}
+
+// ---------------------------------------------------------------------------
+// Request / Response Wrappers (placeholder)
+// ---------------------------------------------------------------------------
+
+// --- CreateOrder ---
+message CreateOrderRequest {
+  string                  user_id = 1;
+  repeated OrderItemProto items   = 2;
+}
+
+message CreateOrderResponse {
+  OrderProto order = 1;
+}
+
+// --- GetOrderById ---
+message GetOrderByIdRequest {
+  string order_id = 1;
+}
+
+message GetOrderByIdResponse {
+  OrderProto order = 1;
+}
+
+// ---------------------------------------------------------------------------
+// Service Definition (placeholder)
+// ---------------------------------------------------------------------------
+
+// OrderService akan diimplementasikan di components/order.
+// Komunikasi ke modul Auth (validasi token/permission) dilakukan
+// via AuthClient trait — bukan import langsung ke internal Auth.
+service OrderService {
+  rpc CreateOrder   (CreateOrderRequest)   returns (CreateOrderResponse);
+  rpc GetOrderById  (GetOrderByIdRequest)  returns (GetOrderByIdResponse);
+}
+

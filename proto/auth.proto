@@ -1,0 +1,94 @@
+// proto/auth.proto
+//
+// Kontrak gRPC untuk modul Auth (RBAC).
+// Digunakan untuk komunikasi East-West (service-to-service) antar modul,
+// atau sebagai titik migrasi ke Microservice di masa depan tanpa ubah logika bisnis.
+//
+// Compile dengan: prost + tonic-build (dari build.rs di crate app atau auth)
+
+syntax = "proto3";
+
+package auth;
+
+// ---------------------------------------------------------------------------
+// Messages (setara dengan DTO publik di lib.rs)
+// ---------------------------------------------------------------------------
+
+message PermissionProto {
+  string name = 1;
+}
+
+message RoleProto {
+  string name                       = 1;
+  repeated PermissionProto permissions = 2;
+}
+
+message UserProto {
+  string    id    = 1;
+  string    email = 2;
+  RoleProto role  = 3;
+}
+
+// ---------------------------------------------------------------------------
+// Request / Response Wrappers
+// ---------------------------------------------------------------------------
+
+// --- CreateUser ---
+message CreateUserRequest {
+  string email     = 1;
+  string role_name = 2;
+}
+
+message CreateUserResponse {
+  UserProto user = 1;
+}
+
+// --- GetUserById ---
+message GetUserByIdRequest {
+  string user_id = 1;
+}
+
+message GetUserByIdResponse {
+  UserProto user = 1;
+}
+
+// --- AssignPermissionToRole ---
+message AssignPermissionRequest {
+  string role_name        = 1;
+  string permission_name  = 2;
+}
+
+message AssignPermissionResponse {
+  // Empty response — sukses ditandai dengan status gRPC OK.
+}
+
+// --- ValidateToken ---
+message ValidateTokenRequest {
+  string token = 1;
+}
+
+message ValidateTokenResponse {
+  UserProto user = 1;
+}
+
+// ---------------------------------------------------------------------------
+// Service Definition
+// ---------------------------------------------------------------------------
+
+// AuthService memaparkan seluruh operasi RBAC via gRPC.
+// Satu implementasi Rust (AuthService di components/auth) melayani
+// baik panggilan in-process (Arc<dyn AuthClient>) maupun via jaringan (gRPC).
+service AuthService {
+  // Membuat pengguna baru dan mengasosiasikannya dengan sebuah role.
+  rpc CreateUser (CreateUserRequest) returns (CreateUserResponse);
+
+  // Mengambil data pengguna berdasarkan ID.
+  rpc GetUserById (GetUserByIdRequest) returns (GetUserByIdResponse);
+
+  // Menambahkan permission ke dalam role secara dinamis (idempotent).
+  rpc AssignPermissionToRole (AssignPermissionRequest) returns (AssignPermissionResponse);
+
+  // Memvalidasi token dan mengembalikan UserProto lengkap dengan permissions.
+  rpc ValidateToken (ValidateTokenRequest) returns (ValidateTokenResponse);
+}
+
