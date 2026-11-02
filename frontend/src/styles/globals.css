@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../../tailwind.config.mjs";
 
 @layer base {
   :root {
@@ -27,4 +26,3 @@
   * { @apply border-border; }
   body { @apply bg-background text-foreground; }
 }
-
