@@ -19,12 +19,22 @@ AI harus mengasumsikan bahwa struktur proyek dasar adalah sebagai berikut:
 
 ```text
 base-modular-monolith/
-├── Cargo.toml                # Root Workspace
+├── Cargo.toml                # Konfigurasi Workspace Utama (Mendaftarkan semua modul)
+├── prd.md                    # Dokumentasi Product Requirement Document
+├── gemini.md                 # Panduan Konteks AI (AI Context Window Guide)
 ├── proto/
-│   └── auth.proto            # Protobuf file
-├── app/                      # Axum Router & Tonic gRPC Server (Aggregator)
-└── components/
-    └── auth/                 # Crate Utama Otorisasi (RBAC)
+│   ├── auth.proto            # Kontrak gRPC modul otorisasi
+│   └── order.proto           # Kontrak gRPC modul order jika dibutuhkan
+├── app/                      # AGGREGATOR: Gerbang HTTP Axum Router & gRPC Server
+│   ├── Cargo.toml
+│   └── src/
+│       ├── main.rs           # Tempat menyatukan (wiring) semua modul komponen
+│       └── middleware.rs     # Middleware Global Guard (RBAC Extractor)
+└── components/               # Domain / Kumpulan Modul Bisnis Marketplace
+    ├── auth/                 # Modul User, Role, Permission (RBAC)
+    ├── product/              # Modul Produk (Katalog, Kategori, Stok)
+    ├── order/                # Modul Order (Transaksi, Checkout)
+    └── payment/              # Modul Payment (Invoicing, Gateway Integration)
 ```
 
 ### 2.1. Template Membuat Modul Baru (Crate Komponen)

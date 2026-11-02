@@ -1,0 +1,9 @@
+[package]
+name    = "app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+auth  = { path = "../components/auth" }
+tokio = { workspace = true }
+
