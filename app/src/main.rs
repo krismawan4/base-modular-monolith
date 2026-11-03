@@ -35,7 +35,7 @@ async fn main() {
         "postgres://postgres:password@127.0.0.1:5432/modular_monolith".to_string()
     });
 
-    let auth_client = match PgPoolOptions::new()
+    let (auth_client, users_client) = match PgPoolOptions::new()
         .max_connections(10)
         .acquire_timeout(std::time::Duration::from_secs(3))
         .connect(&database_url)
@@ -43,16 +43,20 @@ async fn main() {
     {
         Ok(pool) => {
             tracing::info!("Terhubung ke database PostgreSQL di {database_url}");
-            build_client(pool)
+            let auth = build_client(pool.clone())
                 .await
-                .expect("Gagal menginisialisasi skema database Auth")
+                .expect("Gagal menginisialisasi skema database Auth");
+            let users = users::build_client(pool)
+                .await
+                .expect("Gagal menginisialisasi skema database Users");
+            (auth, users)
         }
         Err(err) => {
             tracing::warn!(
                 "Tidak dapat terhubung ke PostgreSQL ({err}). Menjalankan dengan in-memory store sebagai fallback..."
             );
             tracing::info!("Tip: Jalankan `docker compose up -d postgres` untuk mengaktifkan database.");
-            build_in_memory_client()
+            (build_in_memory_client(), users::build_in_memory_client())
         }
     };
 
@@ -73,6 +77,7 @@ async fn main() {
     let app = Router::new()
         .route("/", get(root))
         .merge(auth::auth_routes(auth_client, jwt_secret))
+        .merge(users::users_routes(users_client))
         .layer(cors)
         .layer(CookieManagerLayer::new())
         .layer(TraceLayer::new_for_http());

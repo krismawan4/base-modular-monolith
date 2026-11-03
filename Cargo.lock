@@ -44,6 +44,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
+ "users",
  "uuid",
 ]
 
@@ -2225,6 +2226,23 @@ dependencies = [
  "idna",
  "percent-encoding",
  "serde",
+]
+
+[[package]]
+name = "users"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "bcrypt",
+ "chrono",
+ "http-body-util",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tower",
+ "uuid",
 ]
 
 [[package]]

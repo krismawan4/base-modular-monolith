@@ -111,12 +111,6 @@ pub struct LoginPayload {
 }
 
 #[derive(Deserialize)]
-pub struct CreateUserBody {
-    pub email:     String,
-    pub role_name: String,
-}
-
-#[derive(Deserialize)]
 pub struct AssignPermissionBody {
     pub permission_name: String,
 }
@@ -292,50 +286,6 @@ async fn dashboard_handler(
     })))
 }
 
-/// POST /api/auth/users
-/// Body: `{ "email": "...", "role_name": "admin" }`
-async fn create_user(
-    State(client): State<DynAuthClient>,
-    Json(body):    Json<CreateUserBody>,
-) -> impl IntoResponse {
-    match client.create_user(&body.email, &body.role_name).await {
-        Ok(user) => (
-            StatusCode::CREATED,
-            Json(json!({
-                "status": "success",
-                "message": "User created successfully",
-                "data": UserResponse::from(user)
-            })),
-        )
-            .into_response(),
-        Err(e) => {
-            let (status, body) = auth_error_to_response(e);
-            (status, body).into_response()
-        }
-    }
-}
-
-/// GET /api/auth/users/:id
-async fn get_user_by_id(
-    State(client): State<DynAuthClient>,
-    Path(user_id): Path<String>,
-) -> impl IntoResponse {
-    match client.get_user_by_id(&user_id).await {
-        Ok(user) => (
-            StatusCode::OK,
-            Json(json!({
-                "status": "success",
-                "data": UserResponse::from(user)
-            })),
-        )
-            .into_response(),
-        Err(e) => {
-            let (status, body) = auth_error_to_response(e);
-            (status, body).into_response()
-        }
-    }
-}
-
 /// POST /api/auth/roles/:role_name/permissions
 /// Body: `{ "permission_name": "order:read" }`
 async fn assign_permission(
@@ -404,9 +354,7 @@ pub fn auth_routes(client: DynAuthClient, jwt_secret: Arc<String>) -> Router {
         .route("/api/auth/login", post(login_handler))
         .route("/api/auth/logout", post(logout_handler))
         .route("/api/auth/dashboard", get(dashboard_handler))
-        // Management routes
-        .route("/api/auth/users", post(create_user))
-        .route("/api/auth/users/:id", get(get_user_by_id))
+        // Role & token verification routes
         .route("/api/auth/roles/:role_name/permissions", post(assign_permission))
         .route("/api/auth/validate-token", post(validate_token))
         .with_state(state)
@@ -515,7 +463,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_and_get_user_response_has_data_property() {
+    async fn test_auth_users_route_is_removed_from_auth_module() {
         let app = test_app();
 
         let create_req = Request::builder()
@@ -531,31 +479,8 @@ mod tests {
             ))
             .unwrap();
 
-        let response = app.clone().oneshot(create_req).await.unwrap();
-        assert_eq!(response.status(), StatusCode::CREATED);
-
-        let body = response.into_body().collect().await.unwrap().to_bytes();
-        let json: Value = serde_json::from_slice(&body).unwrap();
-
-        assert_eq!(json["status"], "success");
-        assert!(json.get("data").is_some());
-        let user_id = json["data"]["id"].as_str().unwrap().to_string();
-        assert_eq!(json["data"]["email"], "newuser@example.com");
-
-        // Test get user by id
-        let get_req = Request::builder()
-            .method("GET")
-            .uri(format!("/api/auth/users/{user_id}"))
-            .body(Body::empty())
-            .unwrap();
-
-        let get_res = app.oneshot(get_req).await.unwrap();
-        assert_eq!(get_res.status(), StatusCode::OK);
-
-        let get_body = get_res.into_body().collect().await.unwrap().to_bytes();
-        let get_json: Value = serde_json::from_slice(&get_body).unwrap();
-        assert_eq!(get_json["status"], "success");
-        assert_eq!(get_json["data"]["id"], user_id);
+        let response = app.oneshot(create_req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]

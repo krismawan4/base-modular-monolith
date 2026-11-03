@@ -2,6 +2,7 @@
 members = [
     "app",
     "modules/auth",
+    "modules/users",
 ]
 resolver = "2"
 

@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 auth               = { path = "../modules/auth" }
+users              = { path = "../modules/users" }
 tokio              = { workspace = true }
 axum               = { workspace = true }
 tower              = { version = "0.5", features = ["util"] }
