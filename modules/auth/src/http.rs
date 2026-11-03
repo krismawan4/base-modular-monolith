@@ -771,4 +771,89 @@ mod tests {
         assert_eq!(final_json["status"], "error");
         assert_eq!(final_json["message"], "Token has been revoked or logged out");
     }
+
+    #[tokio::test]
+    async fn test_login_logout_login_again_can_access_dashboard() {
+        let app = test_app();
+
+        // 1. Login pertama -> Token 1
+        let login_req1 = Request::builder()
+            .method("POST")
+            .uri("/api/auth/login")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                json!({
+                    "email": "admin@example.com",
+                    "password": "password123",
+                    "device_name": "Device 1"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+
+        let res1 = app.clone().oneshot(login_req1).await.unwrap();
+        assert_eq!(res1.status(), StatusCode::OK);
+        let body1 = res1.into_body().collect().await.unwrap().to_bytes();
+        let json1: Value = serde_json::from_slice(&body1).unwrap();
+        let token1 = json1["data"]["token"].as_str().unwrap().to_string();
+
+        // 2. Logout dengan Token 1
+        let logout_req = Request::builder()
+            .method("POST")
+            .uri("/api/auth/logout")
+            .header(header::AUTHORIZATION, format!("Bearer {token1}"))
+            .body(Body::empty())
+            .unwrap();
+        let logout_res = app.clone().oneshot(logout_req).await.unwrap();
+        assert_eq!(logout_res.status(), StatusCode::OK);
+
+        // 3. Verifikasi Token 1 tidak bisa akses dashboard
+        let dash_fail = Request::builder()
+            .method("GET")
+            .uri("/api/auth/dashboard")
+            .header(header::AUTHORIZATION, format!("Bearer {token1}"))
+            .body(Body::empty())
+            .unwrap();
+        let fail_res = app.clone().oneshot(dash_fail).await.unwrap();
+        assert_eq!(fail_res.status(), StatusCode::UNAUTHORIZED);
+
+        // 4. Login kembali -> Token 2
+        let login_req2 = Request::builder()
+            .method("POST")
+            .uri("/api/auth/login")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                json!({
+                    "email": "admin@example.com",
+                    "password": "password123",
+                    "device_name": "Device 2"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+
+        let res2 = app.clone().oneshot(login_req2).await.unwrap();
+        assert_eq!(res2.status(), StatusCode::OK);
+        let body2 = res2.into_body().collect().await.unwrap().to_bytes();
+        let json2: Value = serde_json::from_slice(&body2).unwrap();
+        let token2 = json2["data"]["token"].as_str().unwrap();
+
+        // Token 2 harus berbeda dari Token 1
+        assert_ne!(&token1, token2);
+
+        // 5. Akses dashboard dengan Token 2 -> HARUS BERHASIL 200 OK!
+        let dash_success = Request::builder()
+            .method("GET")
+            .uri("/api/auth/dashboard")
+            .header(header::AUTHORIZATION, format!("Bearer {token2}"))
+            .body(Body::empty())
+            .unwrap();
+        let success_res = app.oneshot(dash_success).await.unwrap();
+        assert_eq!(success_res.status(), StatusCode::OK);
+
+        let success_body = success_res.into_body().collect().await.unwrap().to_bytes();
+        let success_json: Value = serde_json::from_slice(&success_body).unwrap();
+        assert_eq!(success_json["status"], "success");
+        assert_eq!(success_json["data"]["user"]["email"], "admin@example.com");
+    }
 }

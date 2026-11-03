@@ -19,6 +19,7 @@ pub struct Claims {
     pub email: String,
     pub exp: usize,
     pub iat: usize,
+    pub jti: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -46,6 +47,7 @@ pub fn create_jwt(
         email: email.to_string(),
         exp,
         iat: now.timestamp() as usize,
+        jti: uuid::Uuid::new_v4().to_string(),
     };
 
     encode(
