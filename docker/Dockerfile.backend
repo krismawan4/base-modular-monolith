@@ -13,24 +13,24 @@ WORKDIR /app
 # Copy manifest dulu untuk cache dependency layer
 COPY Cargo.toml Cargo.lock ./
 COPY app/Cargo.toml          app/Cargo.toml
-COPY components/auth/Cargo.toml components/auth/Cargo.toml
+COPY modules/auth/Cargo.toml modules/auth/Cargo.toml
 
 # Buat stub src agar cargo fetch bisa berjalan tanpa source asli
-RUN mkdir -p app/src components/auth/src/internal \
+RUN mkdir -p app/src modules/auth/src/internal \
     && echo 'fn main() {}' > app/src/main.rs \
-    && echo ''              > components/auth/src/lib.rs \
-    && echo ''              > components/auth/src/internal/mod.rs \
-    && echo ''              > components/auth/src/internal/repository.rs \
-    && echo ''              > components/auth/src/internal/service.rs
+    && echo ''              > modules/auth/src/lib.rs \
+    && echo ''              > modules/auth/src/internal/mod.rs \
+    && echo ''              > modules/auth/src/internal/repository.rs \
+    && echo ''              > modules/auth/src/internal/service.rs
 
 RUN cargo build --release -p app 2>/dev/null || true
 
 # Copy source asli dan compile ulang (hanya source yang berubah)
-COPY app/        app/
-COPY components/ components/
-COPY proto/      proto/
+COPY app/     app/
+COPY modules/ modules/
+COPY proto/   proto/
 
-RUN touch app/src/main.rs components/auth/src/lib.rs \
+RUN touch app/src/main.rs modules/auth/src/lib.rs \
     && cargo build --release -p app
 
 # ─────────────────────────────────────────────────────────────

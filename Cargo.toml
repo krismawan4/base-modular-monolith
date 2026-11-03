@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "app",
-    "components/auth",
+    "modules/auth",
 ]
 resolver = "2"
 

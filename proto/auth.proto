@@ -76,7 +76,7 @@ message ValidateTokenResponse {
 // ---------------------------------------------------------------------------
 
 // AuthService memaparkan seluruh operasi RBAC via gRPC.
-// Satu implementasi Rust (AuthService di components/auth) melayani
+// Satu implementasi Rust (AuthService di modules/auth) melayani
 // baik panggilan in-process (Arc<dyn AuthClient>) maupun via jaringan (gRPC).
 service AuthService {
   // Membuat pengguna baru dan mengasosiasikannya dengan sebuah role.

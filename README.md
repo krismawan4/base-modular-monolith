@@ -17,7 +17,7 @@ base-modular-monolith/
 │   └── src/
 │       ├── main.rs           # Tempat menyatukan (wiring) semua modul komponen
 │       └── middleware.rs     # Middleware Global Guard (RBAC Extractor)
-└── components/               # Domain / Kumpulan Modul Bisnis Marketplace
+└── modules/                  # Domain / Kumpulan Modul Bisnis Marketplace
     ├── auth/                 # Modul User, Role, Permission (RBAC)
     ├── product/              # Modul Produk (Katalog, Kategori, Stok)
     ├── order/                # Modul Order (Transaksi, Checkout)

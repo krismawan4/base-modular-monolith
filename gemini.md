@@ -8,7 +8,7 @@ Dokumen ini berfungsi sebagai peta konteks (*Context Window Guide*) bagi AI (sep
 ## 1. System Prompt Constraints
 Saat berinteraksi mengenai proyek ini, AI wajib mematuhi aturan berikut:
 1. **Language Constaint:** Seluruh contoh kode wajib ditulis menggunakan bahasa **Rust** versi modern (Async/Await, Tokio *runtime*). **Dilarang** menyarankan, menganalogikan, atau menuliskan potongan kode menggunakan PHP, Java, Go, atau Node.js kecuali diminta secara eksplisit.
-2. **Architecture Enforcement:** Selalu patuhi pola **Cargo Workspaces**. Jika diminta membuat modul baru (misal: `inventory`), kode wajib dipecah ke dalam struktur `components/inventory/src/lib.rs` (untuk *public trait/contracts*) dan `components/inventory/src/internal/` (untuk logika privat).
+2. **Architecture Enforcement:** Selalu patuhi pola **Cargo Workspaces**. Jika diminta membuat modul baru (misal: `inventory`), kode wajib dipecah ke dalam struktur `modules/inventory/src/lib.rs` (untuk *public trait/contracts*) dan `modules/inventory/src/internal/` (untuk logika privat).
 3. **No Direct Shared States:** Jangan pernah menyarankan pembuatan fungsi atau *global state* yang memungkinkan sebuah modul membaca struct internal modul lain tanpa melalui gerbang `trait` publiknya.
 
 ---
@@ -30,7 +30,7 @@ base-modular-monolith/
 │   └── src/
 │       ├── main.rs           # Tempat menyatukan (wiring) semua modul komponen
 │       └── middleware.rs     # Middleware Global Guard (RBAC Extractor)
-└── components/               # Domain / Kumpulan Modul Bisnis Marketplace
+└── modules/                  # Domain / Kumpulan Modul Bisnis Marketplace
     ├── auth/                 # Modul User, Role, Permission (RBAC)
     ├── product/              # Modul Produk (Katalog, Kategori, Stok)
     ├── order/                # Modul Order (Transaksi, Checkout)
@@ -41,7 +41,7 @@ base-modular-monolith/
 Jika user meminta: *"Buatkan saya modul baru untuk [Nama Modul]!"*, generate struktur `lib.rs` publik dengan pola berikut:
 
 ```rust
-// components/[nama_modul]/src/lib.rs
+// modules/[nama_modul]/src/lib.rs
 use std::sync::Arc;
 use async_trait::async_trait;
 

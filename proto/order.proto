@@ -2,7 +2,7 @@
 //
 // Kontrak gRPC untuk modul Order (placeholder).
 // File ini adalah scaffolding awal — implementasi penuh akan diisi
-// saat modul `components/order` dikembangkan.
+// saat modul `modules/order` dikembangkan.
 //
 // Sesuai PRD §5 (CQRS Readiness): jalur write dan read akan dipisah
 // saat skala bisnis bertumbuh, dimediasi via Message Broker.
@@ -55,7 +55,7 @@ message GetOrderByIdResponse {
 // Service Definition (placeholder)
 // ---------------------------------------------------------------------------
 
-// OrderService akan diimplementasikan di components/order.
+// OrderService akan diimplementasikan di modules/order.
 // Komunikasi ke modul Auth (validasi token/permission) dilakukan
 // via AuthClient trait — bukan import langsung ke internal Auth.
 service OrderService {
