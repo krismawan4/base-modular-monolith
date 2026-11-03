@@ -121,13 +121,26 @@ pub fn build_in_memory_client() -> DynAuthClient {
     internal::service::AuthService::new_in_memory()
 }
 
+/// Membangun instance `TokenBlacklist` berbasis Redis.
+pub async fn build_redis_blacklist(redis_url: &str) -> Result<DynTokenBlacklist, redis::RedisError> {
+    let bl = blacklist::RedisTokenBlacklist::new(redis_url).await?;
+    Ok(Arc::new(bl))
+}
+
+/// Membangun instance `TokenBlacklist` in-memory (berguna untuk testing & fallback dev).
+pub fn build_in_memory_blacklist() -> DynTokenBlacklist {
+    Arc::new(blacklist::InMemoryTokenBlacklist::new())
+}
+
 // ---------------------------------------------------------------------------
-// HTTP Router & Middleware (publik agar bisa di-merge & digunakan di app)
+// HTTP Router, Middleware & Blacklist (publik agar bisa digunakan di app)
 // ---------------------------------------------------------------------------
 
+pub mod blacklist;
 pub mod http;
 pub mod middleware;
 
+pub use blacklist::{DynTokenBlacklist, TokenBlacklist};
 pub use http::{auth_routes, AuthApiDoc, AuthState};
 pub use middleware::{create_jwt, decode_jwt, AuthSource, AuthUser};
 

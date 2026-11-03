@@ -23,6 +23,23 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Redis Cache / Token Blacklist ───────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: modular_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./docker/redis:/data
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # ── Rust Backend (Axum) ──────────────────────────────────────
   backend:
     build:
@@ -35,11 +52,14 @@ services:
       HOST: "0.0.0.0"
       PORT: "8000"
       DATABASE_URL: postgres://postgres:password@postgres:5432/modular_monolith
+      REDIS_URL: redis://redis:6379
     ports:
       - "8000:8000"   # HTTP REST (Axum)
       # - "50051:50051" # gRPC (aktifkan saat Tonic siap)
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - app_network

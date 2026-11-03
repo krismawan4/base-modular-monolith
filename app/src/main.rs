@@ -37,9 +37,10 @@ async fn root() -> Json<Value> {
 }
 
 pub fn create_app(
-    auth_client: auth::DynAuthClient,
-    users_client: users::DynUsersClient,
-    jwt_secret: Arc<String>,
+    auth_client:     auth::DynAuthClient,
+    users_client:    users::DynUsersClient,
+    jwt_secret:      Arc<String>,
+    token_blacklist: auth::DynTokenBlacklist,
 ) -> Router {
     let mut api_doc = ApiDoc::openapi();
     api_doc.merge(auth::AuthApiDoc::openapi());
@@ -69,7 +70,7 @@ pub fn create_app(
 
     Router::new()
         .route("/", get(root))
-        .merge(auth::auth_routes(auth_client, jwt_secret))
+        .merge(auth::auth_routes(auth_client, jwt_secret, token_blacklist))
         .merge(users::users_routes(users_client))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api_doc))
         .layer(cors)
@@ -118,7 +119,25 @@ async fn main() {
         "super_secret_jwt_key_that_is_at_least_32_characters_long!".to_string()
     }));
 
-    let app = create_app(auth_client, users_client, jwt_secret);
+    let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| {
+        "redis://127.0.0.1:6379".to_string()
+    });
+
+    let token_blacklist = match auth::build_redis_blacklist(&redis_url).await {
+        Ok(bl) => {
+            tracing::info!("Terhubung ke Redis di {redis_url}");
+            bl
+        }
+        Err(err) => {
+            tracing::warn!(
+                "Tidak dapat terhubung ke Redis ({err}). Menjalankan dengan in-memory blacklist sebagai fallback..."
+            );
+            tracing::info!("Tip: Jalankan `docker compose up -d redis` untuk mengaktifkan Redis server.");
+            auth::build_in_memory_blacklist()
+        }
+    };
+
+    let app = create_app(auth_client, users_client, jwt_secret, token_blacklist);
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let port: u16 = std::env::var("PORT")
@@ -150,8 +169,9 @@ mod tests {
         let auth_client = auth::build_in_memory_client();
         let users_client = users::build_in_memory_client();
         let jwt_secret = Arc::new("test_secret_key_that_is_at_least_32_characters_long!".to_string());
+        let blacklist = auth::build_in_memory_blacklist();
 
-        let app = create_app(auth_client, users_client, jwt_secret);
+        let app = create_app(auth_client, users_client, jwt_secret, blacklist);
 
         // 1. Check openapi.json
         let req = Request::builder()

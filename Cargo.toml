@@ -20,4 +20,6 @@ bcrypt        = "0.15"
 chrono        = { version = "0.4", features = ["serde"] }
 utoipa        = { version = "5", features = ["axum_extras", "chrono", "uuid"] }
 utoipa-swagger-ui = { version = "8", features = ["axum"] }
+redis         = { version = "0.28", default-features = false, features = ["tokio-comp", "connection-manager"] }
+sha2          = "0.10"
 

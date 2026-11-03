@@ -18,7 +18,8 @@ use serde_json::{json, Value};
 use tower_cookies::{cookie::SameSite, Cookie, Cookies};
 
 use crate::{
-    middleware::{create_jwt, AuthSource, AuthUser},
+    blacklist::DynTokenBlacklist,
+    middleware::{create_jwt, decode_jwt, AuthSource, AuthUser},
     AuthError, DynAuthClient, UserDto,
 };
 
@@ -28,8 +29,9 @@ use crate::{
 
 #[derive(Clone)]
 pub struct AuthState {
-    pub client: DynAuthClient,
+    pub client:     DynAuthClient,
     pub jwt_secret: Arc<String>,
+    pub blacklist:  DynTokenBlacklist,
 }
 
 impl FromRef<AuthState> for DynAuthClient {
@@ -243,9 +245,45 @@ pub async fn login_handler(
     responses(
         (status = 200, description = "Logged out successfully")
     ),
+    security(
+        ("bearer_auth" = [])
+    ),
     tag = "Auth"
 )]
-pub async fn logout_handler(cookies: Cookies) -> Json<Value> {
+pub async fn logout_handler(
+    State(state): State<AuthState>,
+    cookies: Cookies,
+    headers: axum::http::HeaderMap,
+) -> Json<Value> {
+    // 1. Ekstrak token dari header Authorization: Bearer <token>
+    let token_from_bearer = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|val| val.to_str().ok())
+        .and_then(|val| {
+            if val.starts_with("Bearer ") {
+                Some(val[7..].trim().to_string())
+            } else {
+                None
+            }
+        });
+
+    // 2. Jika tidak ada di header, cek cookie auth_token
+    let token = token_from_bearer.or_else(|| {
+        cookies.get("auth_token").map(|c| c.value().to_string())
+    });
+
+    // 3. Masukkan ke blacklist (Redis / Memory) dengan sisa masa berlaku token (TTL)
+    if let Some(tok) = token {
+        if let Ok(claims) = decode_jwt(&tok, &state.jwt_secret) {
+            let now = chrono::Utc::now().timestamp() as usize;
+            if claims.exp > now {
+                let ttl_secs = (claims.exp - now) as u64;
+                let _ = state.blacklist.blacklist_token(&tok, ttl_secs).await;
+            }
+        }
+    }
+
+    // 4. Hapus Cookie HttpOnly
     let mut auth_cookie = Cookie::from("auth_token");
     auth_cookie.set_path("/");
     cookies.remove(auth_cookie);
@@ -432,8 +470,16 @@ pub struct AuthApiDoc;
 /// let app = Router::new()
 ///     .merge(auth::auth_routes(auth_client, jwt_secret));
 /// ```
-pub fn auth_routes(client: DynAuthClient, jwt_secret: Arc<String>) -> Router {
-    let state = AuthState { client, jwt_secret };
+pub fn auth_routes(
+    client:     DynAuthClient,
+    jwt_secret: Arc<String>,
+    blacklist:  DynTokenBlacklist,
+) -> Router {
+    let state = AuthState {
+        client,
+        jwt_secret,
+        blacklist,
+    };
 
     Router::new()
         // Auth session flows
@@ -461,7 +507,8 @@ mod tests {
     fn test_app() -> Router {
         let client = build_in_memory_client();
         let jwt_secret = Arc::new("test_secret_key_that_is_at_least_32_characters_long!".to_string());
-        auth_routes(client, jwt_secret).layer(CookieManagerLayer::new())
+        let blacklist = crate::build_in_memory_blacklist();
+        auth_routes(client, jwt_secret, blacklist).layer(CookieManagerLayer::new())
     }
 
     #[tokio::test]
@@ -662,5 +709,66 @@ mod tests {
 
         let response = app.oneshot(req).await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_bearer_token_cannot_access_dashboard_after_logout() {
+        let app = test_app();
+
+        // 1. Login with Bearer token
+        let login_req = Request::builder()
+            .method("POST")
+            .uri("/api/auth/login")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                json!({
+                    "email": "admin@example.com",
+                    "password": "password123",
+                    "device_name": "Swagger UI"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+
+        let login_res = app.clone().oneshot(login_req).await.unwrap();
+        assert_eq!(login_res.status(), StatusCode::OK);
+        let body = login_res.into_body().collect().await.unwrap().to_bytes();
+        let login_json: Value = serde_json::from_slice(&body).unwrap();
+        let token = login_json["data"]["token"].as_str().unwrap();
+
+        // 2. Akses dashboard sebelum logout -> 200 OK
+        let dash_req = Request::builder()
+            .method("GET")
+            .uri("/api/auth/dashboard")
+            .header(header::AUTHORIZATION, format!("Bearer {token}"))
+            .body(Body::empty())
+            .unwrap();
+        let dash_res = app.clone().oneshot(dash_req).await.unwrap();
+        assert_eq!(dash_res.status(), StatusCode::OK);
+
+        // 3. Logout dengan mengirim token Bearer
+        let logout_req = Request::builder()
+            .method("POST")
+            .uri("/api/auth/logout")
+            .header(header::AUTHORIZATION, format!("Bearer {token}"))
+            .body(Body::empty())
+            .unwrap();
+        let logout_res = app.clone().oneshot(logout_req).await.unwrap();
+        assert_eq!(logout_res.status(), StatusCode::OK);
+
+        // 4. Akses dashboard setelah logout -> 401 UNAUTHORIZED
+        let dash_after_logout = Request::builder()
+            .method("GET")
+            .uri("/api/auth/dashboard")
+            .header(header::AUTHORIZATION, format!("Bearer {token}"))
+            .body(Body::empty())
+            .unwrap();
+        let final_res = app.oneshot(dash_after_logout).await.unwrap();
+        assert_eq!(final_res.status(), StatusCode::UNAUTHORIZED);
+
+        let final_body = final_res.into_body().collect().await.unwrap().to_bytes();
+        let final_json: Value = serde_json::from_slice(&final_body).unwrap();
+        assert_eq!(final_json["status"], "error");
+        assert_eq!(final_json["message"], "Token has been revoked or logged out");
     }
 }

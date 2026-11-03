@@ -110,7 +110,22 @@ where
             }
         };
 
-        // 3. Validasi token JWT
+        // 3. Cek apakah token telah di-blacklist (misalnya sudah di-logout via Redis)
+        if auth_state
+            .blacklist
+            .is_blacklisted(&token)
+            .await
+            .unwrap_or(false)
+        {
+            let err_body = Json(json!({
+                "status": "error",
+                "message": "Token has been revoked or logged out",
+                "data": null
+            }));
+            return Err((StatusCode::UNAUTHORIZED, err_body).into_response());
+        }
+
+        // 4. Validasi signature & masa aktif token JWT
         let claims = match decode_jwt(&token, &auth_state.jwt_secret) {
             Ok(c) => c,
             Err(_) => {
