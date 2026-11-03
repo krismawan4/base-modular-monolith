@@ -93,6 +93,9 @@ secrets.toml
 docker-compose.override.yml
 docker/postgreSQL/*
 !docker/postgreSQL/.gitkeep
+docker/redis/*
+!docker/redis/.gitkeep
+*.rdb
 
 # =============================================================================
 # Frontend / Node.js
