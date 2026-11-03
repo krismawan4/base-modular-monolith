@@ -588,6 +588,51 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_dashboard_with_bearer_token() {
+        let app = test_app();
+
+        // 1. Login with device_name to get Bearer token
+        let login_req = Request::builder()
+            .method("POST")
+            .uri("/api/auth/login")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                json!({
+                    "email": "admin@example.com",
+                    "password": "password123",
+                    "device_name": "Pixel 8"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+
+        let login_res = app.clone().oneshot(login_req).await.unwrap();
+        assert_eq!(login_res.status(), StatusCode::OK);
+
+        let body = login_res.into_body().collect().await.unwrap().to_bytes();
+        let login_json: Value = serde_json::from_slice(&body).unwrap();
+        let token = login_json["data"]["token"].as_str().unwrap();
+
+        // 2. Call dashboard with Authorization: Bearer <token>
+        let dash_req = Request::builder()
+            .method("GET")
+            .uri("/api/auth/dashboard")
+            .header(header::AUTHORIZATION, format!("Bearer {token}"))
+            .body(Body::empty())
+            .unwrap();
+
+        let dash_res = app.oneshot(dash_req).await.unwrap();
+        assert_eq!(dash_res.status(), StatusCode::OK);
+
+        let dash_body = dash_res.into_body().collect().await.unwrap().to_bytes();
+        let dash_json: Value = serde_json::from_slice(&dash_body).unwrap();
+
+        assert_eq!(dash_json["status"], "success");
+        assert_eq!(dash_json["data"]["client_channel"], "Mobile (Bearer Token)");
+        assert_eq!(dash_json["data"]["user"]["email"], "admin@example.com");
+    }
+
+    #[tokio::test]
     async fn test_old_api_login_path_returns_404() {
         let app = test_app();
 

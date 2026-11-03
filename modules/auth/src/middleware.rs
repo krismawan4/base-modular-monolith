@@ -75,27 +75,27 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let auth_state = AuthState::from_ref(state);
 
-        // 1. Cek Cookie terlebih dahulu (Web Client / SPA)
-        let token_from_cookie = Cookies::from_request_parts(parts, state)
-            .await
-            .ok()
-            .and_then(|cookies| cookies.get("auth_token").map(|c| c.value().to_string()))
-            .map(|token| (token, AuthSource::Cookie));
+        // 1. Cek Header Authorization Bearer terlebih dahulu (Mobile Client / API)
+        let token_from_bearer = parts
+            .headers
+            .get(header::AUTHORIZATION)
+            .and_then(|val| val.to_str().ok())
+            .and_then(|val| {
+                if val.starts_with("Bearer ") {
+                    Some((val[7..].trim().to_string(), AuthSource::Bearer))
+                } else {
+                    None
+                }
+            });
 
-        // 2. Jika tidak ada di cookie, cek Header Authorization Bearer (Mobile Client)
-        let token_pair = match token_from_cookie {
+        // 2. Jika tidak ada di header, cek Cookie (Web Client / SPA)
+        let token_pair = match token_from_bearer {
             Some(pair) => Some(pair),
-            None => parts
-                .headers
-                .get(header::AUTHORIZATION)
-                .and_then(|val| val.to_str().ok())
-                .and_then(|val| {
-                    if val.starts_with("Bearer ") {
-                        Some((val[7..].trim().to_string(), AuthSource::Bearer))
-                    } else {
-                        None
-                    }
-                }),
+            None => Cookies::from_request_parts(parts, state)
+                .await
+                .ok()
+                .and_then(|cookies| cookies.get("auth_token").map(|c| c.value().to_string()))
+                .map(|token| (token, AuthSource::Cookie)),
         };
 
         let (token, auth_source) = match token_pair {
