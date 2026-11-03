@@ -103,7 +103,8 @@ where
             None => {
                 let err_body = Json(json!({
                     "status": "error",
-                    "message": "Unauthenticated: Missing cookie or Bearer token"
+                    "message": "Unauthenticated: Missing cookie or Bearer token",
+                    "data": null
                 }));
                 return Err((StatusCode::UNAUTHORIZED, err_body).into_response());
             }
@@ -115,7 +116,8 @@ where
             Err(_) => {
                 let err_body = Json(json!({
                     "status": "error",
-                    "message": "Invalid or expired token"
+                    "message": "Invalid or expired token",
+                    "data": null
                 }));
                 return Err((StatusCode::UNAUTHORIZED, err_body).into_response());
             }

@@ -81,11 +81,13 @@ dependencies = [
  "axum",
  "bcrypt",
  "chrono",
+ "http-body-util",
  "jsonwebtoken",
  "serde",
  "serde_json",
  "sqlx",
  "tokio",
+ "tower",
  "tower-cookies",
  "uuid",
 ]

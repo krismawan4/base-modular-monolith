@@ -80,12 +80,7 @@ impl From<UserDto> for UserResponse {
     }
 }
 
-#[derive(Serialize)]
-struct ErrorResponse {
-    error: String,
-}
-
-fn auth_error_to_response(e: AuthError) -> (StatusCode, Json<ErrorResponse>) {
+fn auth_error_to_response(e: AuthError) -> (StatusCode, Json<Value>) {
     let status = match &e {
         AuthError::UserNotFound       => StatusCode::NOT_FOUND,
         AuthError::RoleNotFound       => StatusCode::UNPROCESSABLE_ENTITY,
@@ -94,7 +89,14 @@ fn auth_error_to_response(e: AuthError) -> (StatusCode, Json<ErrorResponse>) {
         AuthError::DuplicateUser      => StatusCode::CONFLICT,
         AuthError::Internal(_)        => StatusCode::INTERNAL_SERVER_ERROR,
     };
-    (status, Json(ErrorResponse { error: e.to_string() }))
+    (
+        status,
+        Json(json!({
+            "status": "error",
+            "message": e.to_string(),
+            "data": null
+        })),
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -139,8 +141,9 @@ async fn login_handler(
             StatusCode::BAD_REQUEST,
             Json(json!({
                 "status": "error",
-                "error": "Invalid request payload",
-                "details": e.body_text()
+                "message": "Invalid request payload",
+                "details": e.body_text(),
+                "data": null
             })),
         )
     })?;
@@ -152,18 +155,32 @@ async fn login_handler(
         .map_err(|e| match e {
             AuthError::InvalidCredentials => (
                 StatusCode::UNAUTHORIZED,
-                Json(json!({ "error": "Invalid email or password" })),
+                Json(json!({
+                    "status": "error",
+                    "message": "Invalid email or password",
+                    "data": null
+                })),
             ),
             _ => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": "Authentication error", "details": e.to_string() })),
+                Json(json!({
+                    "status": "error",
+                    "message": "Authentication error",
+                    "details": e.to_string(),
+                    "data": null
+                })),
             ),
         })?;
 
     let token = create_jwt(&user.id, &user.email, &state.jwt_secret).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "error": "Token creation error", "details": e.to_string() })),
+            Json(json!({
+                "status": "error",
+                "message": "Token creation error",
+                "details": e.to_string(),
+                "data": null
+            })),
         )
     })?;
 
@@ -172,13 +189,16 @@ async fn login_handler(
             StatusCode::OK,
             Json(json!({
                 "status": "success",
-                "token_type": "Bearer",
-                "token": token,
-                "device_name": device,
-                "user": {
-                    "id": user.id,
-                    "name": user.name,
-                    "email": user.email
+                "message": "Authenticated via Bearer Token",
+                "data": {
+                    "token_type": "Bearer",
+                    "token": token,
+                    "device_name": device,
+                    "user": {
+                        "id": user.id,
+                        "name": user.name,
+                        "email": user.email
+                    }
                 }
             })),
         )
@@ -197,10 +217,12 @@ async fn login_handler(
             Json(json!({
                 "status": "success",
                 "message": "Authenticated via HttpOnly Cookie",
-                "user": {
-                    "id": user.id,
-                    "name": user.name,
-                    "email": user.email
+                "data": {
+                    "user": {
+                        "id": user.id,
+                        "name": user.name,
+                        "email": user.email
+                    }
                 }
             })),
         )
@@ -216,7 +238,8 @@ async fn logout_handler(cookies: Cookies) -> Json<Value> {
 
     Json(json!({
         "status": "success",
-        "message": "Logged out successfully"
+        "message": "Logged out successfully",
+        "data": null
     }))
 }
 
@@ -232,28 +255,39 @@ async fn dashboard_handler(
         .map_err(|e| match e {
             AuthError::UserNotFound => (
                 StatusCode::NOT_FOUND,
-                Json(json!({ "error": "User profile not found" })),
+                Json(json!({
+                    "status": "error",
+                    "message": "User profile not found",
+                    "data": null
+                })),
             ),
             _ => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": "Database error", "details": e.to_string() })),
+                Json(json!({
+                    "status": "error",
+                    "message": "Database error",
+                    "details": e.to_string(),
+                    "data": null
+                })),
             ),
         })?;
 
     Ok(Json(json!({
         "status": "success",
-        "client_channel": match auth_user.auth_source {
-            AuthSource::Cookie => "Web SPA (Cookie)",
-            AuthSource::Bearer => "Mobile (Bearer Token)",
-        },
-        "user": {
-            "id": user.id,
-            "name": user.name,
-            "email": user.email
-        },
-        "dashboard_stats": {
-            "unread_notifications": 3,
-            "account_health": "Optimal"
+        "data": {
+            "client_channel": match auth_user.auth_source {
+                AuthSource::Cookie => "Web SPA (Cookie)",
+                AuthSource::Bearer => "Mobile (Bearer Token)",
+            },
+            "user": {
+                "id": user.id,
+                "name": user.name,
+                "email": user.email
+            },
+            "dashboard_stats": {
+                "unread_notifications": 3,
+                "account_health": "Optimal"
+            }
         }
     })))
 }
@@ -267,12 +301,16 @@ async fn create_user(
     match client.create_user(&body.email, &body.role_name).await {
         Ok(user) => (
             StatusCode::CREATED,
-            Json(serde_json::to_value(UserResponse::from(user)).unwrap()),
+            Json(json!({
+                "status": "success",
+                "message": "User created successfully",
+                "data": UserResponse::from(user)
+            })),
         )
             .into_response(),
         Err(e) => {
             let (status, body) = auth_error_to_response(e);
-            (status, Json(serde_json::to_value(body.0).unwrap())).into_response()
+            (status, body).into_response()
         }
     }
 }
@@ -285,12 +323,15 @@ async fn get_user_by_id(
     match client.get_user_by_id(&user_id).await {
         Ok(user) => (
             StatusCode::OK,
-            Json(serde_json::to_value(UserResponse::from(user)).unwrap()),
+            Json(json!({
+                "status": "success",
+                "data": UserResponse::from(user)
+            })),
         )
             .into_response(),
         Err(e) => {
             let (status, body) = auth_error_to_response(e);
-            (status, Json(serde_json::to_value(body.0).unwrap())).into_response()
+            (status, body).into_response()
         }
     }
 }
@@ -306,10 +347,18 @@ async fn assign_permission(
         .assign_permission_to_role(&role_name, &body.permission_name)
         .await
     {
-        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Ok(_) => (
+            StatusCode::OK,
+            Json(json!({
+                "status": "success",
+                "message": format!("Permission '{}' assigned to role '{}'", body.permission_name, role_name),
+                "data": null
+            })),
+        )
+            .into_response(),
         Err(e) => {
             let (status, body) = auth_error_to_response(e);
-            (status, Json(serde_json::to_value(body.0).unwrap())).into_response()
+            (status, body).into_response()
         }
     }
 }
@@ -323,12 +372,15 @@ async fn validate_token(
     match client.validate_token(&body.token).await {
         Ok(user) => (
             StatusCode::OK,
-            Json(serde_json::to_value(UserResponse::from(user)).unwrap()),
+            Json(json!({
+                "status": "success",
+                "data": UserResponse::from(user)
+            })),
         )
             .into_response(),
         Err(e) => {
             let (status, body) = auth_error_to_response(e);
-            (status, Json(serde_json::to_value(body.0).unwrap())).into_response()
+            (status, body).into_response()
         }
     }
 }
@@ -361,4 +413,180 @@ pub fn auth_routes(client: DynAuthClient, jwt_secret: Arc<String>) -> Router {
         .route("/api/auth/roles/:role_name/permissions", post(assign_permission))
         .route("/api/auth/validate-token", post(validate_token))
         .with_state(state)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::build_in_memory_client;
+    use axum::{
+        body::Body,
+        http::{header, Request, StatusCode},
+    };
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+    use tower_cookies::CookieManagerLayer;
+
+    fn test_app() -> Router {
+        let client = build_in_memory_client();
+        let jwt_secret = Arc::new("test_secret_key_that_is_at_least_32_characters_long!".to_string());
+        auth_routes(client, jwt_secret).layer(CookieManagerLayer::new())
+    }
+
+    #[tokio::test]
+    async fn test_login_cookie_response_has_data_property() {
+        let app = test_app();
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/login")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                json!({
+                    "email": "admin@example.com",
+                    "password": "password123"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+
+        let response = app.oneshot(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let json: Value = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(json["status"], "success");
+        assert_eq!(json["message"], "Authenticated via HttpOnly Cookie");
+        assert!(json.get("data").is_some());
+        assert_eq!(json["data"]["user"]["email"], "admin@example.com");
+        assert_eq!(json["data"]["user"]["name"], "Admin Developer");
+    }
+
+    #[tokio::test]
+    async fn test_login_bearer_response_has_data_property() {
+        let app = test_app();
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/login")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                json!({
+                    "email": "admin@example.com",
+                    "password": "password123",
+                    "device_name": "iPhone 15"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+
+        let response = app.oneshot(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let json: Value = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(json["status"], "success");
+        assert!(json.get("data").is_some());
+        assert_eq!(json["data"]["token_type"], "Bearer");
+        assert_eq!(json["data"]["device_name"], "iPhone 15");
+        assert!(json["data"]["token"].is_string());
+        assert_eq!(json["data"]["user"]["email"], "admin@example.com");
+    }
+
+    #[tokio::test]
+    async fn test_logout_response_has_data_property() {
+        let app = test_app();
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/logout")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let json: Value = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(json["status"], "success");
+        assert_eq!(json["message"], "Logged out successfully");
+        assert!(json.get("data").is_some());
+        assert!(json["data"].is_null());
+    }
+
+    #[tokio::test]
+    async fn test_create_and_get_user_response_has_data_property() {
+        let app = test_app();
+
+        let create_req = Request::builder()
+            .method("POST")
+            .uri("/api/auth/users")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                json!({
+                    "email": "newuser@example.com",
+                    "role_name": "admin"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+
+        let response = app.clone().oneshot(create_req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let json: Value = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(json["status"], "success");
+        assert!(json.get("data").is_some());
+        let user_id = json["data"]["id"].as_str().unwrap().to_string();
+        assert_eq!(json["data"]["email"], "newuser@example.com");
+
+        // Test get user by id
+        let get_req = Request::builder()
+            .method("GET")
+            .uri(format!("/api/auth/users/{user_id}"))
+            .body(Body::empty())
+            .unwrap();
+
+        let get_res = app.oneshot(get_req).await.unwrap();
+        assert_eq!(get_res.status(), StatusCode::OK);
+
+        let get_body = get_res.into_body().collect().await.unwrap().to_bytes();
+        let get_json: Value = serde_json::from_slice(&get_body).unwrap();
+        assert_eq!(get_json["status"], "success");
+        assert_eq!(get_json["data"]["id"], user_id);
+    }
+
+    #[tokio::test]
+    async fn test_error_response_has_data_property() {
+        let app = test_app();
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/login")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                json!({
+                    "email": "admin@example.com",
+                    "password": "wrong_password"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+
+        let response = app.oneshot(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let json: Value = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(json["status"], "error");
+        assert_eq!(json["message"], "Invalid email or password");
+        assert!(json.get("data").is_some());
+        assert!(json["data"].is_null());
+    }
 }

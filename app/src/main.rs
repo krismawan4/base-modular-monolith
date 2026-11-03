@@ -15,9 +15,11 @@ use tower_http::trace::TraceLayer;
 
 async fn root() -> Json<Value> {
     Json(json!({
-        "status": "ok",
-        "service": "modular-monolith-api",
-        "version": env!("CARGO_PKG_VERSION")
+        "status": "success",
+        "data": {
+            "service": "modular-monolith-api",
+            "version": env!("CARGO_PKG_VERSION")
+        }
     }))
 }
 
