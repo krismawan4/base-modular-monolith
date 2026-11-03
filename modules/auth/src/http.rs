@@ -130,7 +130,7 @@ pub struct ValidateTokenBody {
 // Handlers
 // ---------------------------------------------------------------------------
 
-/// POST /api/login and /api/auth/login
+/// POST /api/auth/login
 async fn login_handler(
     State(state): State<AuthState>,
     cookies: Cookies,
@@ -230,7 +230,7 @@ async fn login_handler(
     }
 }
 
-/// POST /api/logout and /api/auth/logout
+/// POST /api/auth/logout
 async fn logout_handler(cookies: Cookies) -> Json<Value> {
     let mut auth_cookie = Cookie::from("auth_token");
     auth_cookie.set_path("/");
@@ -243,7 +243,7 @@ async fn logout_handler(cookies: Cookies) -> Json<Value> {
     }))
 }
 
-/// GET /api/dashboard and /api/auth/dashboard
+/// GET /api/auth/dashboard
 async fn dashboard_handler(
     auth_user: AuthUser,
     State(state): State<AuthState>,
@@ -400,12 +400,9 @@ pub fn auth_routes(client: DynAuthClient, jwt_secret: Arc<String>) -> Router {
     let state = AuthState { client, jwt_secret };
 
     Router::new()
-        // Auth session flows (mendukung path /api/* dan /api/auth/*)
-        .route("/api/login", post(login_handler))
+        // Auth session flows
         .route("/api/auth/login", post(login_handler))
-        .route("/api/logout", post(logout_handler))
         .route("/api/auth/logout", post(logout_handler))
-        .route("/api/dashboard", get(dashboard_handler))
         .route("/api/auth/dashboard", get(dashboard_handler))
         // Management routes
         .route("/api/auth/users", post(create_user))
@@ -439,7 +436,7 @@ mod tests {
 
         let req = Request::builder()
             .method("POST")
-            .uri("/api/login")
+            .uri("/api/auth/login")
             .header(header::CONTENT_TYPE, "application/json")
             .body(Body::from(
                 json!({
@@ -469,7 +466,7 @@ mod tests {
 
         let req = Request::builder()
             .method("POST")
-            .uri("/api/login")
+            .uri("/api/auth/login")
             .header(header::CONTENT_TYPE, "application/json")
             .body(Body::from(
                 json!({
@@ -501,7 +498,7 @@ mod tests {
 
         let req = Request::builder()
             .method("POST")
-            .uri("/api/logout")
+            .uri("/api/auth/logout")
             .body(Body::empty())
             .unwrap();
 
@@ -567,7 +564,7 @@ mod tests {
 
         let req = Request::builder()
             .method("POST")
-            .uri("/api/login")
+            .uri("/api/auth/login")
             .header(header::CONTENT_TYPE, "application/json")
             .body(Body::from(
                 json!({
@@ -588,5 +585,26 @@ mod tests {
         assert_eq!(json["message"], "Invalid email or password");
         assert!(json.get("data").is_some());
         assert!(json["data"].is_null());
+    }
+
+    #[tokio::test]
+    async fn test_old_api_login_path_returns_404() {
+        let app = test_app();
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/login")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                json!({
+                    "email": "admin@example.com",
+                    "password": "password123"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+
+        let response = app.oneshot(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 }
