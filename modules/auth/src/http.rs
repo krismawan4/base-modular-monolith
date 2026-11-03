@@ -267,6 +267,9 @@ pub async fn logout_handler(cookies: Cookies) -> Json<Value> {
         (status = 404, description = "User profile not found"),
         (status = 500, description = "Internal server error")
     ),
+    security(
+        ("bearer_auth" = [])
+    ),
     tag = "Auth"
 )]
 pub async fn dashboard_handler(

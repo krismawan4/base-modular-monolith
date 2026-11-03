@@ -12,6 +12,7 @@ use sqlx::postgres::PgPoolOptions;
 use tower_cookies::CookieManagerLayer;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
+use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -43,6 +44,18 @@ pub fn create_app(
     let mut api_doc = ApiDoc::openapi();
     api_doc.merge(auth::AuthApiDoc::openapi());
     api_doc.merge(users::UsersApiDoc::openapi());
+
+    let components = api_doc.components.get_or_insert_with(Default::default);
+    components.add_security_scheme(
+        "bearer_auth",
+        SecurityScheme::Http(
+            HttpBuilder::new()
+                .scheme(HttpAuthScheme::Bearer)
+                .bearer_format("JWT")
+                .description(Some("Masukkan JWT Bearer Token (contoh: eyJhbGciOi...)"))
+                .build(),
+        ),
+    );
 
     let cors = CorsLayer::new()
         .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
@@ -160,6 +173,12 @@ mod tests {
         assert!(paths.contains_key("/api/auth/logout"), "paths should contain /api/auth/logout");
         assert!(paths.contains_key("/api/users"), "paths should contain /api/users");
         assert!(paths.contains_key("/api/users/{id}"), "paths should contain /api/users/{{id}}");
+
+        // Verify security scheme
+        let schemes = json["components"]["securitySchemes"].as_object().unwrap();
+        assert!(schemes.contains_key("bearer_auth"), "securitySchemes should contain bearer_auth");
+        assert_eq!(schemes["bearer_auth"]["type"], "http");
+        assert_eq!(schemes["bearer_auth"]["scheme"], "bearer");
 
         // 2. Check swagger-ui
         let req_ui = Request::builder()
