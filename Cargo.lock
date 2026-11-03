@@ -79,10 +79,14 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "axum",
+ "bcrypt",
+ "chrono",
+ "jsonwebtoken",
  "serde",
  "serde_json",
  "sqlx",
  "tokio",
+ "tower-cookies",
  "uuid",
 ]
 

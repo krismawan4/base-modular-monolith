@@ -76,6 +76,7 @@ impl AuthClient for AuthService {
 
         Ok(UserDto {
             id:    user.id,
+            name:  user.name,
             email: user.email,
             role:  role_to_dto(&role),
         })
@@ -98,6 +99,7 @@ impl AuthClient for AuthService {
 
         Ok(UserDto {
             id:    user.id,
+            name:  user.name,
             email: user.email,
             role:  role_to_dto(&role),
         })
@@ -138,6 +140,36 @@ impl AuthClient for AuthService {
 
         Ok(UserDto {
             id:    user.id,
+            name:  user.name,
+            email: user.email,
+            role:  role_to_dto(&role),
+        })
+    }
+
+    async fn authenticate_user(&self, email: &str, password: &str) -> Result<UserDto, AuthError> {
+        let user = self
+            .repo
+            .find_user_by_email(email)
+            .await
+            .map_err(|e| AuthError::Internal(e.to_string()))?
+            .ok_or(AuthError::InvalidCredentials)?;
+
+        let hash = user.password_hash.as_deref().unwrap_or("");
+        let is_valid = bcrypt::verify(password, hash).unwrap_or(false);
+        if !is_valid {
+            return Err(AuthError::InvalidCredentials);
+        }
+
+        let role = self
+            .repo
+            .find_role_by_name(&user.role_name)
+            .await
+            .map_err(|e| AuthError::Internal(e.to_string()))?
+            .ok_or_else(|| AuthError::Internal("role data corrupted".to_string()))?;
+
+        Ok(UserDto {
+            id:    user.id,
+            name:  user.name,
             email: user.email,
             role:  role_to_dto(&role),
         })
@@ -251,5 +283,26 @@ mod tests {
         let client = make_client().await;
         let err = client.validate_token("invalid-tok").await.unwrap_err();
         assert_eq!(err, AuthError::TokenInvalid);
+    }
+
+    #[tokio::test]
+    async fn authenticate_seeded_admin_ok() {
+        let client = make_client().await;
+        let user = client
+            .authenticate_user("admin@example.com", "password123")
+            .await
+            .unwrap();
+        assert_eq!(user.email, "admin@example.com");
+        assert_eq!(user.role.name, "admin");
+    }
+
+    #[tokio::test]
+    async fn authenticate_wrong_password_fails() {
+        let client = make_client().await;
+        let err = client
+            .authenticate_user("admin@example.com", "wrong-password")
+            .await
+            .unwrap_err();
+        assert_eq!(err, AuthError::InvalidCredentials);
     }
 }

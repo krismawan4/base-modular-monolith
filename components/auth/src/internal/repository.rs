@@ -30,11 +30,13 @@ pub(crate) struct Role {
 
 #[derive(Debug, Clone)]
 pub(crate) struct User {
-    pub(crate) id:        String,
-    pub(crate) email:     String,
-    pub(crate) role_name: String,
+    pub(crate) id:            String,
+    pub(crate) name:          String,
+    pub(crate) email:         String,
+    pub(crate) password_hash: Option<String>,
+    pub(crate) role_name:     String,
     #[allow(dead_code)]
-    pub(crate) token:     String,
+    pub(crate) token:         String,
 }
 
 // ---------------------------------------------------------------------------
@@ -82,11 +84,19 @@ async fn init_db(pool: &PgPool) -> Result<(), sqlx::Error> {
         r#"
         CREATE TABLE IF NOT EXISTS users (
             id VARCHAR(36) PRIMARY KEY,
+            name VARCHAR(255) NOT NULL DEFAULT 'User',
             email VARCHAR(255) UNIQUE NOT NULL,
+            password_hash VARCHAR(255),
             role_name VARCHAR(50) NOT NULL REFERENCES roles(name),
-            token VARCHAR(255) UNIQUE NOT NULL,
+            token VARCHAR(255) NOT NULL DEFAULT '',
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+        "#,
+        r#"
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(255) NOT NULL DEFAULT 'User';
+        "#,
+        r#"
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
         "#,
         r#"
         INSERT INTO roles (name) VALUES ('admin'), ('member') ON CONFLICT DO NOTHING;
@@ -105,6 +115,29 @@ async fn init_db(pool: &PgPool) -> Result<(), sqlx::Error> {
 
     for stmt in statements {
         sqlx::query(stmt).execute(pool).await?;
+    }
+
+    let user_exists = sqlx::query("SELECT id FROM users WHERE email = $1")
+        .bind("admin@example.com")
+        .fetch_optional(pool)
+        .await?;
+
+    if user_exists.is_none() {
+        let password_hash = bcrypt::hash("password123", bcrypt::DEFAULT_COST)
+            .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+        let user_id = Uuid::new_v4().to_string();
+
+        sqlx::query(
+            "INSERT INTO users (id, name, email, password_hash, role_name, token) 
+             VALUES ($1, $2, $3, $4, 'admin', $5)",
+        )
+        .bind(&user_id)
+        .bind("Admin Developer")
+        .bind("admin@example.com")
+        .bind(&password_hash)
+        .bind(&user_id)
+        .execute(pool)
+        .await?;
     }
 
     Ok(())
@@ -139,6 +172,20 @@ impl AuthRepository {
             },
         );
 
+        let admin_id = "admin-dev-001".to_string();
+        let admin_hash = bcrypt::hash("password123", 4).unwrap_or_default();
+        let admin_user = User {
+            id: admin_id.clone(),
+            name: "Admin Developer".to_string(),
+            email: "admin@example.com".to_string(),
+            password_hash: Some(admin_hash),
+            role_name: "admin".to_string(),
+            token: "admin-token".to_string(),
+        };
+        store.users.insert(admin_id.clone(), admin_user);
+        store.email_index.insert("admin@example.com".to_string(), admin_id.clone());
+        store.token_index.insert("admin-token".to_string(), admin_id);
+
         Self::InMemory(Arc::new(RwLock::new(store)))
     }
 
@@ -162,11 +209,13 @@ impl AuthRepository {
 
                 let id    = Uuid::new_v4().to_string();
                 let token = Uuid::new_v4().to_string();
+                let name  = "User".to_string();
 
                 let res = sqlx::query(
-                    "INSERT INTO users (id, email, role_name, token) VALUES ($1, $2, $3, $4)",
+                    "INSERT INTO users (id, name, email, role_name, token) VALUES ($1, $2, $3, $4, $5)",
                 )
                 .bind(&id)
+                .bind(&name)
                 .bind(email)
                 .bind(role_name)
                 .bind(&token)
@@ -176,7 +225,9 @@ impl AuthRepository {
                 match res {
                     Ok(_) => Ok(User {
                         id,
+                        name,
                         email: email.to_string(),
+                        password_hash: None,
                         role_name: role_name.to_string(),
                         token,
                     }),
@@ -198,12 +249,15 @@ impl AuthRepository {
 
                 let id    = Uuid::new_v4().to_string();
                 let token = Uuid::new_v4().to_string();
+                let name  = "User".to_string();
 
                 let user = User {
-                    id:        id.clone(),
-                    email:     email.to_string(),
-                    role_name: role_name.to_string(),
-                    token:     token.clone(),
+                    id:            id.clone(),
+                    name,
+                    email:         email.to_string(),
+                    password_hash: None,
+                    role_name:     role_name.to_string(),
+                    token:         token.clone(),
                 };
 
                 store.users.insert(id.clone(), user.clone());
@@ -219,16 +273,18 @@ impl AuthRepository {
     pub(crate) async fn find_user_by_id(&self, user_id: &str) -> Result<Option<User>, sqlx::Error> {
         match self {
             Self::Postgres(pool) => {
-                let row = sqlx::query("SELECT id, email, role_name, token FROM users WHERE id = $1")
+                let row = sqlx::query("SELECT id, COALESCE(name, 'User') as name, email, password_hash, role_name, token FROM users WHERE id = $1")
                     .bind(user_id)
                     .fetch_optional(pool)
                     .await?;
 
                 Ok(row.map(|r| User {
-                    id:        r.get("id"),
-                    email:     r.get("email"),
-                    role_name: r.get("role_name"),
-                    token:     r.get("token"),
+                    id:            r.get("id"),
+                    name:          r.get("name"),
+                    email:         r.get("email"),
+                    password_hash: r.get("password_hash"),
+                    role_name:     r.get("role_name"),
+                    token:         r.get("token"),
                 }))
             }
             Self::InMemory(store) => {
@@ -238,20 +294,50 @@ impl AuthRepository {
         }
     }
 
+    /// Mengambil user berdasarkan email (untuk login).
+    pub(crate) async fn find_user_by_email(&self, email: &str) -> Result<Option<User>, sqlx::Error> {
+        match self {
+            Self::Postgres(pool) => {
+                let row = sqlx::query("SELECT id, COALESCE(name, 'User') as name, email, password_hash, role_name, token FROM users WHERE email = $1")
+                    .bind(email)
+                    .fetch_optional(pool)
+                    .await?;
+
+                Ok(row.map(|r| User {
+                    id:            r.get("id"),
+                    name:          r.get("name"),
+                    email:         r.get("email"),
+                    password_hash: r.get("password_hash"),
+                    role_name:     r.get("role_name"),
+                    token:         r.get("token"),
+                }))
+            }
+            Self::InMemory(store) => {
+                let store = store.read().expect("auth store RwLock poisoned");
+                let Some(user_id) = store.email_index.get(email) else {
+                    return Ok(None);
+                };
+                Ok(store.users.get(user_id).cloned())
+            }
+        }
+    }
+
     /// Menemukan user berdasarkan token.
     pub(crate) async fn find_user_by_token(&self, token: &str) -> Result<Option<User>, sqlx::Error> {
         match self {
             Self::Postgres(pool) => {
-                let row = sqlx::query("SELECT id, email, role_name, token FROM users WHERE token = $1")
+                let row = sqlx::query("SELECT id, COALESCE(name, 'User') as name, email, password_hash, role_name, token FROM users WHERE token = $1")
                     .bind(token)
                     .fetch_optional(pool)
                     .await?;
 
                 Ok(row.map(|r| User {
-                    id:        r.get("id"),
-                    email:     r.get("email"),
-                    role_name: r.get("role_name"),
-                    token:     r.get("token"),
+                    id:            r.get("id"),
+                    name:          r.get("name"),
+                    email:         r.get("email"),
+                    password_hash: r.get("password_hash"),
+                    role_name:     r.get("role_name"),
+                    token:         r.get("token"),
                 }))
             }
             Self::InMemory(store) => {

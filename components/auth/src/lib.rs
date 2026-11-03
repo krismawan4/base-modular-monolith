@@ -6,6 +6,7 @@
 
 use std::sync::Arc;
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
 // Public DTOs
@@ -13,13 +14,13 @@ use async_trait::async_trait;
 
 /// Data Transfer Object untuk Permission.
 /// Merepresentasikan satu hak akses yang bersifat read-only bagi konsumen.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PermissionDto {
     pub name: String,
 }
 
 /// Data Transfer Object untuk Role.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoleDto {
     pub name:        String,
     pub permissions: Vec<PermissionDto>,
@@ -27,9 +28,10 @@ pub struct RoleDto {
 
 /// Data Transfer Object untuk User.
 /// Satu-satunya representasi User yang boleh beredar di luar crate `auth`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserDto {
     pub id:    String,
+    pub name:  String,
     pub email: String,
     pub role:  RoleDto,
 }
@@ -45,17 +47,19 @@ pub enum AuthError {
     RoleNotFound,
     TokenInvalid,
     DuplicateUser,
+    InvalidCredentials,
     Internal(String),
 }
 
 impl std::fmt::Display for AuthError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AuthError::UserNotFound   => write!(f, "user not found"),
-            AuthError::RoleNotFound   => write!(f, "role not found"),
-            AuthError::TokenInvalid   => write!(f, "token is invalid or expired"),
-            AuthError::DuplicateUser  => write!(f, "user with this email already exists"),
-            AuthError::Internal(msg)  => write!(f, "internal error: {msg}"),
+            AuthError::UserNotFound       => write!(f, "user not found"),
+            AuthError::RoleNotFound       => write!(f, "role not found"),
+            AuthError::TokenInvalid       => write!(f, "token is invalid or expired"),
+            AuthError::DuplicateUser      => write!(f, "user with this email already exists"),
+            AuthError::InvalidCredentials => write!(f, "invalid email or password"),
+            AuthError::Internal(msg)      => write!(f, "internal error: {msg}"),
         }
     }
 }
@@ -90,6 +94,9 @@ pub trait AuthClient: Send + Sync {
     /// Memvalidasi token (simulasi JWT) dan mengembalikan `UserDto` pemiliknya
     /// beserta seluruh permission yang dimiliki.
     async fn validate_token(&self, token: &str) -> Result<UserDto, AuthError>;
+
+    /// Mengautentikasi pengguna berdasarkan email dan password.
+    async fn authenticate_user(&self, email: &str, password: &str) -> Result<UserDto, AuthError>;
 }
 
 /// Type alias `Arc<dyn AuthClient>` agar mudah digunakan sebagai Axum State
@@ -115,10 +122,14 @@ pub fn build_in_memory_client() -> DynAuthClient {
 }
 
 // ---------------------------------------------------------------------------
-// HTTP Router (publik agar bisa di-merge di app/src/main.rs)
+// HTTP Router & Middleware (publik agar bisa di-merge & digunakan di app)
 // ---------------------------------------------------------------------------
 
 pub mod http;
+pub mod middleware;
+
+pub use http::{auth_routes, AuthState};
+pub use middleware::{create_jwt, decode_jwt, AuthSource, AuthUser};
 
 // ---------------------------------------------------------------------------
 // Internal (semua detail implementasi tersembunyi di sini)
