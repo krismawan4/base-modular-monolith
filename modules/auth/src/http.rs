@@ -103,19 +103,19 @@ fn auth_error_to_response(e: AuthError) -> (StatusCode, Json<Value>) {
 // Request bodies
 // ---------------------------------------------------------------------------
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct LoginPayload {
     pub email: String,
     pub password: String,
     pub device_name: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct AssignPermissionBody {
     pub permission_name: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct ValidateTokenBody {
     pub token: String,
 }
@@ -125,7 +125,19 @@ pub struct ValidateTokenBody {
 // ---------------------------------------------------------------------------
 
 /// POST /api/auth/login
-async fn login_handler(
+#[utoipa::path(
+    post,
+    path = "/api/auth/login",
+    request_body = LoginPayload,
+    responses(
+        (status = 200, description = "Login successful (Cookie or Bearer Token)"),
+        (status = 400, description = "Invalid request payload"),
+        (status = 401, description = "Invalid credentials"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Auth"
+)]
+pub async fn login_handler(
     State(state): State<AuthState>,
     cookies: Cookies,
     payload: Result<Json<LoginPayload>, JsonRejection>,
@@ -225,7 +237,15 @@ async fn login_handler(
 }
 
 /// POST /api/auth/logout
-async fn logout_handler(cookies: Cookies) -> Json<Value> {
+#[utoipa::path(
+    post,
+    path = "/api/auth/logout",
+    responses(
+        (status = 200, description = "Logged out successfully")
+    ),
+    tag = "Auth"
+)]
+pub async fn logout_handler(cookies: Cookies) -> Json<Value> {
     let mut auth_cookie = Cookie::from("auth_token");
     auth_cookie.set_path("/");
     cookies.remove(auth_cookie);
@@ -238,7 +258,18 @@ async fn logout_handler(cookies: Cookies) -> Json<Value> {
 }
 
 /// GET /api/auth/dashboard
-async fn dashboard_handler(
+#[utoipa::path(
+    get,
+    path = "/api/auth/dashboard",
+    responses(
+        (status = 200, description = "Dashboard profile and stats retrieved"),
+        (status = 401, description = "Unauthorized (missing or invalid token)"),
+        (status = 404, description = "User profile not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Auth"
+)]
+pub async fn dashboard_handler(
     auth_user: AuthUser,
     State(state): State<AuthState>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
@@ -288,7 +319,21 @@ async fn dashboard_handler(
 
 /// POST /api/auth/roles/:role_name/permissions
 /// Body: `{ "permission_name": "order:read" }`
-async fn assign_permission(
+#[utoipa::path(
+    post,
+    path = "/api/auth/roles/{role_name}/permissions",
+    params(
+        ("role_name" = String, Path, description = "Role name (e.g. admin, member)")
+    ),
+    request_body = AssignPermissionBody,
+    responses(
+        (status = 200, description = "Permission assigned to role successfully"),
+        (status = 422, description = "Role not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Auth"
+)]
+pub async fn assign_permission(
     State(client):     State<DynAuthClient>,
     Path(role_name):   Path<String>,
     Json(body):        Json<AssignPermissionBody>,
@@ -315,7 +360,18 @@ async fn assign_permission(
 
 /// POST /api/auth/validate-token
 /// Body: `{ "token": "..." }`
-async fn validate_token(
+#[utoipa::path(
+    post,
+    path = "/api/auth/validate-token",
+    request_body = ValidateTokenBody,
+    responses(
+        (status = 200, description = "Token is valid, user details returned", body = UserDto),
+        (status = 401, description = "Token is invalid or expired"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Auth"
+)]
+pub async fn validate_token(
     State(client): State<DynAuthClient>,
     Json(body):    Json<ValidateTokenBody>,
 ) -> impl IntoResponse {
@@ -334,6 +390,33 @@ async fn validate_token(
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// OpenAPI Documentation
+// ---------------------------------------------------------------------------
+
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    paths(
+        login_handler,
+        logout_handler,
+        dashboard_handler,
+        assign_permission,
+        validate_token,
+    ),
+    components(schemas(
+        crate::UserDto,
+        crate::RoleDto,
+        crate::PermissionDto,
+        LoginPayload,
+        AssignPermissionBody,
+        ValidateTokenBody,
+    )),
+    tags(
+        (name = "Auth", description = "Authentication & Authorization API")
+    )
+)]
+pub struct AuthApiDoc;
 
 // ---------------------------------------------------------------------------
 // Router

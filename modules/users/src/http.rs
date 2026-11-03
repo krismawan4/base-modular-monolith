@@ -17,7 +17,7 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::{CreateUserInput, DynUsersClient, UpdateUserInput, UserError};
+use crate::{CreateUserInput, DynUsersClient, UpdateUserInput, UserDto, UserError};
 
 fn user_error_to_response(e: UserError) -> (StatusCode, Json<Value>) {
     let status = match &e {
@@ -40,7 +40,7 @@ fn user_error_to_response(e: UserError) -> (StatusCode, Json<Value>) {
 // Request Payloads
 // ---------------------------------------------------------------------------
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateUserPayload {
     pub name:     Option<String>,
     pub email:    String,
@@ -48,7 +48,7 @@ pub struct CreateUserPayload {
     pub role:     Option<String>,
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default, utoipa::ToSchema)]
 pub struct UpdateUserPayload {
     pub name:     Option<String>,
     pub email:    Option<String>,
@@ -61,7 +61,19 @@ pub struct UpdateUserPayload {
 // ---------------------------------------------------------------------------
 
 /// POST /api/users
-async fn create_user_handler(
+#[utoipa::path(
+    post,
+    path = "/api/users",
+    request_body = CreateUserPayload,
+    responses(
+        (status = 201, description = "User created successfully", body = UserDto),
+        (status = 400, description = "Invalid request payload or validation error"),
+        (status = 409, description = "User with this email already exists"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Users"
+)]
+pub async fn create_user_handler(
     State(client): State<DynUsersClient>,
     payload:       Result<Json<CreateUserPayload>, JsonRejection>,
 ) -> impl IntoResponse {
@@ -106,7 +118,16 @@ async fn create_user_handler(
 }
 
 /// GET /api/users
-async fn list_users_handler(State(client): State<DynUsersClient>) -> impl IntoResponse {
+#[utoipa::path(
+    get,
+    path = "/api/users",
+    responses(
+        (status = 200, description = "List of users", body = Vec<UserDto>),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Users"
+)]
+pub async fn list_users_handler(State(client): State<DynUsersClient>) -> impl IntoResponse {
     match client.list_users().await {
         Ok(users) => (
             StatusCode::OK,
@@ -124,7 +145,20 @@ async fn list_users_handler(State(client): State<DynUsersClient>) -> impl IntoRe
 }
 
 /// GET /api/users/:id
-async fn get_user_handler(
+#[utoipa::path(
+    get,
+    path = "/api/users/{id}",
+    params(
+        ("id" = String, Path, description = "User ID (UUID)")
+    ),
+    responses(
+        (status = 200, description = "User details", body = UserDto),
+        (status = 404, description = "User not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Users"
+)]
+pub async fn get_user_handler(
     State(client): State<DynUsersClient>,
     Path(id):      Path<String>,
 ) -> impl IntoResponse {
@@ -145,7 +179,23 @@ async fn get_user_handler(
 }
 
 /// PUT /api/users/:id
-async fn update_user_handler(
+#[utoipa::path(
+    put,
+    path = "/api/users/{id}",
+    params(
+        ("id" = String, Path, description = "User ID (UUID)")
+    ),
+    request_body = UpdateUserPayload,
+    responses(
+        (status = 200, description = "User updated successfully", body = UserDto),
+        (status = 400, description = "Invalid request payload or validation error"),
+        (status = 404, description = "User not found"),
+        (status = 409, description = "Duplicate email"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Users"
+)]
+pub async fn update_user_handler(
     State(client): State<DynUsersClient>,
     Path(id):      Path<String>,
     payload:       Result<Json<UpdateUserPayload>, JsonRejection>,
@@ -191,7 +241,20 @@ async fn update_user_handler(
 }
 
 /// DELETE /api/users/:id
-async fn delete_user_handler(
+#[utoipa::path(
+    delete,
+    path = "/api/users/{id}",
+    params(
+        ("id" = String, Path, description = "User ID (UUID)")
+    ),
+    responses(
+        (status = 200, description = "User deleted successfully"),
+        (status = 404, description = "User not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Users"
+)]
+pub async fn delete_user_handler(
     State(client): State<DynUsersClient>,
     Path(id):      Path<String>,
 ) -> impl IntoResponse {
@@ -211,6 +274,30 @@ async fn delete_user_handler(
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// OpenAPI Documentation
+// ---------------------------------------------------------------------------
+
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    paths(
+        create_user_handler,
+        list_users_handler,
+        get_user_handler,
+        update_user_handler,
+        delete_user_handler,
+    ),
+    components(schemas(
+        crate::UserDto,
+        CreateUserPayload,
+        UpdateUserPayload,
+    )),
+    tags(
+        (name = "Users", description = "User Management CRUD API")
+    )
+)]
+pub struct UsersApiDoc;
 
 // ---------------------------------------------------------------------------
 // Router

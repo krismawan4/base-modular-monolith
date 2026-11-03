@@ -13,6 +13,7 @@ serde_json    = "1"
 sqlx          = { workspace = true }
 bcrypt        = { workspace = true }
 chrono        = { workspace = true }
+utoipa        = { workspace = true }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

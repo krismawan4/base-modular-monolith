@@ -15,6 +15,7 @@ bcrypt        = { workspace = true }
 tower-cookies = { workspace = true }
 jsonwebtoken  = { workspace = true }
 chrono        = { workspace = true }
+utoipa        = { workspace = true }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

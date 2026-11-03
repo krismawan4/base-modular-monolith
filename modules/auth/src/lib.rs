@@ -14,13 +14,13 @@ use serde::{Deserialize, Serialize};
 
 /// Data Transfer Object untuk Permission.
 /// Merepresentasikan satu hak akses yang bersifat read-only bagi konsumen.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct PermissionDto {
     pub name: String,
 }
 
 /// Data Transfer Object untuk Role.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct RoleDto {
     pub name:        String,
     pub permissions: Vec<PermissionDto>,
@@ -28,7 +28,7 @@ pub struct RoleDto {
 
 /// Data Transfer Object untuk User.
 /// Satu-satunya representasi User yang boleh beredar di luar crate `auth`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct UserDto {
     pub id:    String,
     pub name:  String,
@@ -128,7 +128,7 @@ pub fn build_in_memory_client() -> DynAuthClient {
 pub mod http;
 pub mod middleware;
 
-pub use http::{auth_routes, AuthState};
+pub use http::{auth_routes, AuthApiDoc, AuthState};
 pub use middleware::{create_jwt, decode_jwt, AuthSource, AuthUser};
 
 // ---------------------------------------------------------------------------

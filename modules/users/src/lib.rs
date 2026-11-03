@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 // Public DTOs
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct UserDto {
     pub id:         String,
     pub name:       String,
@@ -96,7 +96,7 @@ pub fn build_in_memory_client() -> DynUsersClient {
 // ---------------------------------------------------------------------------
 
 pub mod http;
-pub use http::users_routes;
+pub use http::{users_routes, UsersApiDoc};
 
 // ---------------------------------------------------------------------------
 // Internal Details

@@ -12,6 +12,18 @@ use sqlx::postgres::PgPoolOptions;
 use tower_cookies::CookieManagerLayer;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
+
+#[derive(OpenApi)]
+#[openapi(
+    info(
+        title = "Modular Monolith API",
+        version = "0.1.0",
+        description = "Modular Monolith Rust REST API with Axum, RBAC Auth, and Users Management"
+    )
+)]
+struct ApiDoc;
 
 async fn root() -> Json<Value> {
     Json(json!({
@@ -21,6 +33,35 @@ async fn root() -> Json<Value> {
             "version": env!("CARGO_PKG_VERSION")
         }
     }))
+}
+
+pub fn create_app(
+    auth_client: auth::DynAuthClient,
+    users_client: users::DynUsersClient,
+    jwt_secret: Arc<String>,
+) -> Router {
+    let mut api_doc = ApiDoc::openapi();
+    api_doc.merge(auth::AuthApiDoc::openapi());
+    api_doc.merge(users::UsersApiDoc::openapi());
+
+    let cors = CorsLayer::new()
+        .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_headers([
+            header::AUTHORIZATION,
+            header::ACCEPT,
+            header::CONTENT_TYPE,
+        ])
+        .allow_credentials(true);
+
+    Router::new()
+        .route("/", get(root))
+        .merge(auth::auth_routes(auth_client, jwt_secret))
+        .merge(users::users_routes(users_client))
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api_doc))
+        .layer(cors)
+        .layer(CookieManagerLayer::new())
+        .layer(TraceLayer::new_for_http())
 }
 
 #[tokio::main]
@@ -64,23 +105,7 @@ async fn main() {
         "super_secret_jwt_key_that_is_at_least_32_characters_long!".to_string()
     }));
 
-    let cors = CorsLayer::new()
-        .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
-        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
-        .allow_headers([
-            header::AUTHORIZATION,
-            header::ACCEPT,
-            header::CONTENT_TYPE,
-        ])
-        .allow_credentials(true);
-
-    let app = Router::new()
-        .route("/", get(root))
-        .merge(auth::auth_routes(auth_client, jwt_secret))
-        .merge(users::users_routes(users_client))
-        .layer(cors)
-        .layer(CookieManagerLayer::new())
-        .layer(TraceLayer::new_for_http());
+    let app = create_app(auth_client, users_client, jwt_secret);
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let port: u16 = std::env::var("PORT")
@@ -91,7 +116,59 @@ async fn main() {
         .parse()
         .expect("Format HOST:PORT tidak valid");
     tracing::info!("HTTP server listening on http://{addr}");
+    tracing::info!("Swagger UI documentation available at http://{addr}/swagger-ui/");
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn test_swagger_ui_and_openapi_json() {
+        let auth_client = auth::build_in_memory_client();
+        let users_client = users::build_in_memory_client();
+        let jwt_secret = Arc::new("test_secret_key_that_is_at_least_32_characters_long!".to_string());
+
+        let app = create_app(auth_client, users_client, jwt_secret);
+
+        // 1. Check openapi.json
+        let req = Request::builder()
+            .method("GET")
+            .uri("/api-docs/openapi.json")
+            .body(Body::empty())
+            .unwrap();
+
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let body = res.into_body().collect().await.unwrap().to_bytes();
+        let json: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["info"]["title"], "Modular Monolith API");
+
+        // Verify paths from auth and users modules are present
+        let paths = json["paths"].as_object().unwrap();
+        assert!(paths.contains_key("/api/auth/login"), "paths should contain /api/auth/login");
+        assert!(paths.contains_key("/api/auth/logout"), "paths should contain /api/auth/logout");
+        assert!(paths.contains_key("/api/users"), "paths should contain /api/users");
+        assert!(paths.contains_key("/api/users/{id}"), "paths should contain /api/users/{{id}}");
+
+        // 2. Check swagger-ui
+        let req_ui = Request::builder()
+            .method("GET")
+            .uri("/swagger-ui/")
+            .body(Body::empty())
+            .unwrap();
+
+        let res_ui = app.oneshot(req_ui).await.unwrap();
+        assert_eq!(res_ui.status(), StatusCode::OK);
+    }
 }
