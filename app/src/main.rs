@@ -16,6 +16,8 @@ use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
+mod graphql;
+
 #[derive(OpenApi)]
 #[openapi(
     info(
@@ -71,7 +73,8 @@ pub fn create_app(
     Router::new()
         .route("/", get(root))
         .merge(auth::auth_routes(auth_client, jwt_secret, token_blacklist))
-        .merge(users::users_routes(users_client))
+        .merge(users::users_routes(users_client.clone()))
+        .merge(graphql::graphql_routes(users_client))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api_doc))
         .layer(cors)
         .layer(CookieManagerLayer::new())
@@ -149,6 +152,7 @@ async fn main() {
         .expect("Format HOST:PORT tidak valid");
     tracing::info!("HTTP server listening on http://{addr}");
     tracing::info!("Swagger UI documentation available at http://{addr}/swagger-ui/");
+    tracing::info!("GraphQL Playground available at http://{addr}/graphql");
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
@@ -209,5 +213,80 @@ mod tests {
 
         let res_ui = app.oneshot(req_ui).await.unwrap();
         assert_eq!(res_ui.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_graphql_playground_and_operations() {
+        let auth_client = auth::build_in_memory_client();
+        let users_client = users::build_in_memory_client();
+        let jwt_secret = Arc::new("test_secret_key_that_is_at_least_32_characters_long!".to_string());
+        let blacklist = auth::build_in_memory_blacklist();
+
+        let app = create_app(auth_client, users_client, jwt_secret, blacklist);
+
+        // 1. GET /graphql (Playground UI)
+        let req_playground = Request::builder()
+            .method("GET")
+            .uri("/graphql")
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req_playground).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+
+        // 2. POST /graphql (Query hello)
+        let query_hello = serde_json::to_vec(&json!({
+            "query": "{ hello }"
+        })).unwrap();
+
+        let req_hello = Request::builder()
+            .method("POST")
+            .uri("/graphql")
+            .header("content-type", "application/json")
+            .body(Body::from(query_hello))
+            .unwrap();
+
+        let res = app.clone().oneshot(req_hello).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let body = res.into_body().collect().await.unwrap().to_bytes();
+        let val: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(val["data"]["hello"], "Hello from Axum GraphQL!");
+
+        // 3. POST /graphql (Mutation createUser)
+        let mutation_create = serde_json::to_vec(&json!({
+            "query": "mutation { createUser(input: { name: \"John Doe\", email: \"john@example.com\" }) { id name email } }"
+        })).unwrap();
+
+        let req_create = Request::builder()
+            .method("POST")
+            .uri("/graphql")
+            .header("content-type", "application/json")
+            .body(Body::from(mutation_create))
+            .unwrap();
+
+        let res = app.clone().oneshot(req_create).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let body = res.into_body().collect().await.unwrap().to_bytes();
+        let val: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(val["data"]["createUser"]["name"], "John Doe");
+        assert_eq!(val["data"]["createUser"]["email"], "john@example.com");
+
+        // 4. POST /graphql (Query users)
+        let query_users = serde_json::to_vec(&json!({
+            "query": "{ users { name email } }"
+        })).unwrap();
+
+        let req_users = Request::builder()
+            .method("POST")
+            .uri("/graphql")
+            .header("content-type", "application/json")
+            .body(Body::from(query_users))
+            .unwrap();
+
+        let res = app.clone().oneshot(req_users).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let body = res.into_body().collect().await.unwrap().to_bytes();
+        let val: Value = serde_json::from_slice(&body).unwrap();
+        let users = val["data"]["users"].as_array().unwrap();
+        assert!(users.iter().any(|u| u["email"] == "john@example.com"));
     }
 }
