@@ -10,6 +10,7 @@ Saat berinteraksi mengenai proyek ini, AI wajib mematuhi aturan berikut:
 1. **Language Constaint:** Seluruh contoh kode wajib ditulis menggunakan bahasa **Rust** versi modern (Async/Await, Tokio *runtime*). **Dilarang** menyarankan, menganalogikan, atau menuliskan potongan kode menggunakan PHP, Java, Go, atau Node.js kecuali diminta secara eksplisit.
 2. **Architecture Enforcement:** Selalu patuhi pola **Cargo Workspaces**. Jika diminta membuat modul baru (misal: `inventory`), kode wajib dipecah ke dalam struktur `modules/inventory/src/lib.rs` (untuk *public trait/contracts*) dan `modules/inventory/src/internal/` (untuk logika privat).
 3. **No Direct Shared States:** Jangan pernah menyarankan pembuatan fungsi atau *global state* yang memungkinkan sebuah modul membaca struct internal modul lain tanpa melalui gerbang `trait` publiknya.
+4. **Separation of Unit Tests:** Seluruh kode pengujian/unit test (`#[cfg(test)]`) wajib dipisahkan ke dalam file terpisah (`*_test.rs`) menggunakan pola `#[path = "..._test.rs"] mod tests;` (contoh: `service_test.rs`, `http_test.rs`, `blacklist_test.rs`). Dilarang menuliskan implementasi blok pengujian `mod tests { ... }` secara inline di dalam file kode produksi/implementasi utama.
 
 ---
 
@@ -72,6 +73,26 @@ let http_app = Router::new()
     .merge(auth::auth_routes())
     .merge(product::product_routes()) // Contoh modul baru
     .with_state(global_state);
+```
+
+### 2.3. Template Pemisahan File Unit Test
+Untuk menjaga keterbacaan kode produksi, pisahkan seluruh kode unit test ke file berdampingan (`*_test.rs`):
+
+```rust
+// Di file implementasi utama (contoh: modules/[nama_modul]/src/internal/service.rs):
+#[cfg(test)]
+#[path = "service_test.rs"]
+mod tests;
+```
+
+```rust
+// Di file pengujian terpisah (contoh: modules/[nama_modul]/src/internal/service_test.rs):
+use super::*;
+
+#[tokio::test]
+async fn test_example() {
+    // Logika pengujian di sini...
+}
 ```
 
 ---
