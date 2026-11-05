@@ -1,7 +1,6 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use auth::{build_client, build_in_memory_client};
 use axum::{
     http::{header, HeaderValue, Method},
     routing::get,
@@ -101,7 +100,7 @@ async fn main() {
     {
         Ok(pool) => {
             tracing::info!("Terhubung ke database PostgreSQL di {database_url}");
-            let auth = build_client(pool.clone())
+            let auth = auth::build_client(pool.clone())
                 .await
                 .expect("Gagal menginisialisasi skema database Auth");
             let users = users::build_client(pool)
@@ -114,7 +113,7 @@ async fn main() {
                 "Tidak dapat terhubung ke PostgreSQL ({err}). Menjalankan dengan in-memory store sebagai fallback..."
             );
             tracing::info!("Tip: Jalankan `docker compose up -d postgres` untuk mengaktifkan database.");
-            (build_in_memory_client(), users::build_in_memory_client())
+            (auth::build_in_memory_client(), users::build_in_memory_client())
         }
     };
 

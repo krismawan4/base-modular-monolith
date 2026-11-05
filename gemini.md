@@ -11,6 +11,7 @@ Saat berinteraksi mengenai proyek ini, AI wajib mematuhi aturan berikut:
 2. **Architecture Enforcement:** Selalu patuhi pola **Cargo Workspaces**. Jika diminta membuat modul baru (misal: `inventory`), kode wajib dipecah ke dalam struktur `modules/inventory/src/lib.rs` (untuk *public trait/contracts*) dan `modules/inventory/src/internal/` (untuk logika privat).
 3. **No Direct Shared States:** Jangan pernah menyarankan pembuatan fungsi atau *global state* yang memungkinkan sebuah modul membaca struct internal modul lain tanpa melalui gerbang `trait` publiknya.
 4. **Separation of Unit Tests:** Seluruh kode pengujian/unit test (`#[cfg(test)]`) wajib dipisahkan ke dalam file terpisah (`*_test.rs`) menggunakan pola `#[path = "..._test.rs"] mod tests;` (contoh: `service_test.rs`, `http_test.rs`, `blacklist_test.rs`). Dilarang menuliskan implementasi blok pengujian `mod tests { ... }` secara inline di dalam file kode produksi/implementasi utama.
+5. **Explicit Module Namespacing:** Saat menginisialisasi modul di `app/src/main.rs`, dilarang meng-import langsung fungsi factory seperti `build_client` tanpa namespace (hindari `use auth::build_client;`). Wajib menggunakan prefix nama modul secara eksplisit (contoh: `auth::build_client(...)`, `users::build_client(...)`, `auth::build_in_memory_client(...)`) untuk mencegah tabrakan nama (*name collision*) dan menjaga kejelasan sumber modul.
 
 ---
 
