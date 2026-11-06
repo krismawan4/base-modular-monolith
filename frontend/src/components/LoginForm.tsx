@@ -40,7 +40,7 @@ export default function LoginForm() {
 
       if (data?.login?.token) {
         setAuthSession(data.login.token, data.login.user);
-        window.location.href = '/admin';
+        window.location.href = '/admin/';
       } else {
         throw new Error('Respon login tidak valid.');
       }

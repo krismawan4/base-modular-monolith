@@ -128,6 +128,7 @@ Setelah Aggregator berjalan di port 8000:
 
 | Layanan | URL | Keterangan |
 | :--- | :--- | :--- |
+| **Frontend Web App** | [http://127.0.0.1:5173/](http://127.0.0.1:5173/) | Dashboard Admin & Login GraphQL |
 | **REST API Swagger UI** | [http://127.0.0.1:8000/swagger-ui/](http://127.0.0.1:8000/swagger-ui/) | Dokumentasi OpenAPI & Interactive REST tester |
 | **GraphQL Playground** | [http://127.0.0.1:8000/graphql](http://127.0.0.1:8000/graphql) | IDE GraphQL untuk query & mutation user |
 | **OpenAPI Spec (JSON)** | [http://127.0.0.1:8000/api-docs/openapi.json](http://127.0.0.1:8000/api-docs/openapi.json) | File OpenAPI raw schema |

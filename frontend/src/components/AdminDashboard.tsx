@@ -40,9 +40,9 @@ const ME_QUERY = `
 `;
 
 const NAV = [
-  { label: 'Dashboard',   icon: LayoutDashboard, href: '/admin' },
-  { label: 'Users',       icon: Users,            href: '/admin' },
-  { label: 'Settings',    icon: Settings,         href: '/admin' },
+  { label: 'Dashboard',   icon: LayoutDashboard, href: '/admin/' },
+  { label: 'Users',       icon: Users,            href: '/admin/' },
+  { label: 'Settings',    icon: Settings,         href: '/admin/' },
 ];
 
 export default function AdminDashboard() {
@@ -54,7 +54,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     const token = getAuthToken();
     if (!token) {
-      window.location.href = '/login';
+      window.location.href = '/login/';
       return;
     }
 
@@ -88,7 +88,7 @@ export default function AdminDashboard() {
 
   const handleLogout = () => {
     clearAuthSession();
-    window.location.href = '/login';
+    window.location.href = '/login/';
   };
 
   const stats = [

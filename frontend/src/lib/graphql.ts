@@ -1,6 +1,6 @@
 export const GRAPHQL_ENDPOINT =
-  typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
-    ? '/graphql'
+  typeof window !== 'undefined'
+    ? (window.location.port === '4321' ? 'http://127.0.0.1:8000/graphql' : '/graphql')
     : 'http://127.0.0.1:8000/graphql';
 
 export interface GqlUser {

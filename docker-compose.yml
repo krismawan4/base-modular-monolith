@@ -51,7 +51,7 @@ services:
       PORT: "8000"
       DATABASE_URL: postgres://postgres:password@postgres:5432/modular_monolith
       REDIS_URL: redis://redis:6379
-      CORS_ALLOWED_ORIGIN: "http://localhost"
+      CORS_ALLOWED_ORIGIN: "http://localhost:5173"
       # Aktifkan jika memisahkan Users ke container microservice terpisah:
       # USERS_GRPC_URL: http://users_service:8001
     ports:
@@ -64,7 +64,7 @@ services:
     networks:
       - app_network
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8000/"]
+      test: ["CMD-SHELL", "bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/8000' || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -99,7 +99,7 @@ services:
     container_name: modular_frontend
     restart: unless-stopped
     ports:
-      - "80:80"       # Web
+      - "5173:80"       # Web (http://localhost:5173)
     depends_on:
       - backend
     networks:
