@@ -151,3 +151,76 @@ cargo test -p auth
 # Menjalankan test integrasi app (Swagger & GraphQL)
 cargo test -p app
 ```
+
+---
+
+## 🚀 Panduan Deployment ke Production
+
+### 1. Menggunakan Docker Compose (Direkomendasikan)
+Cara termudah dan paling aman untuk menjalankan seluruh stack di server production (VPS / Cloud VM):
+
+```bash
+# 1. Pastikan file .env sudah disetel dengan password/secret production yang aman:
+cp .env .env.production
+# Edit nilai DATABASE_URL, JWT_SECRET, REDIS_URL, CORS_ALLOWED_ORIGIN
+
+# 2. Build dan jalankan seluruh container (Postgres, Redis, Rust Backend, Frontend Nginx):
+docker compose up -d --build
+
+# 3. Cek status logs:
+docker compose logs -f backend
+```
+
+### 2. Menggunakan Binary Linux Native (Systemd di VPS)
+Jika ingin performa maksimal (*bare-metal / near-zero overhead*):
+
+1. **Compile binary Release:**
+   ```bash
+   cargo build --release -p app
+   # Binary hasil build berada di: target/release/app
+   ```
+
+2. **Buat file service systemd (`/etc/systemd/system/modular-monolith.service`):**
+   ```ini
+   [Unit]
+   Description=Modular Monolith Axum Backend
+   After=network.target postgresql.service redis.service
+
+   [Service]
+   Type=simple
+   User=www-data
+   WorkingDirectory=/opt/modular_monolith
+   ExecStart=/opt/modular_monolith/app
+   EnvironmentFile=/opt/modular_monolith/.env
+   Restart=always
+   RestartSec=5
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+
+3. **Aktifkan dan Jalankan Service:**
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable modular-monolith
+   sudo systemctl start modular-monolith
+   ```
+
+4. **Konfigurasi Reverse Proxy (Nginx) dengan HTTPS:**
+   ```nginx
+   server {
+       server_name api.domainanda.com;
+
+       location / {
+           proxy_pass http://127.0.0.1:8000;
+           proxy_http_version 1.1;
+           proxy_set_header Upgrade $http_upgrade;
+           proxy_set_header Connection "upgrade";
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+   }
+   ```
+

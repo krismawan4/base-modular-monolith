@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   # ── PostgreSQL Database ──────────────────────────────────────
   postgres:
@@ -53,9 +51,11 @@ services:
       PORT: "8000"
       DATABASE_URL: postgres://postgres:password@postgres:5432/modular_monolith
       REDIS_URL: redis://redis:6379
+      CORS_ALLOWED_ORIGIN: "http://localhost"
+      # Aktifkan jika memisahkan Users ke container microservice terpisah:
+      # USERS_GRPC_URL: http://users_service:8001
     ports:
-      - "8000:8000"   # HTTP REST (Axum)
-      # - "50051:50051" # gRPC (aktifkan saat Tonic siap)
+      - "8000:8000"   # HTTP REST & GraphQL (Axum)
     depends_on:
       postgres:
         condition: service_healthy
@@ -69,6 +69,27 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  # ── Users Microservice (Opsional — Aktifkan jika split microservice) ───
+  # users_service:
+  #   build:
+  #     context: .
+  #     dockerfile: docker/Dockerfile.backend
+  #   container_name: modular_users_service
+  #   command: ["./users_service"]
+  #   restart: unless-stopped
+  #   environment:
+  #     HOST: "0.0.0.0"
+  #     PORT: "8001"
+  #     DATABASE_URL: postgres://postgres:password@postgres:5432/modular_monolith
+  #   ports:
+  #     - "8001:8001"   # gRPC Port
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   networks:
+  #     - app_network
+
 
   # ── Frontend (Astro → Nginx) ─────────────────────────────────
   frontend:

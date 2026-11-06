@@ -1,37 +1,28 @@
 # ─────────────────────────────────────────────────────────────
 # Stage 1: Builder — compile Rust workspace
 # ─────────────────────────────────────────────────────────────
-FROM rust:1.81-slim AS builder
+FROM rust:1-slim AS builder
 
-# Pasang dependency sistem minimal
+# Pasang dependency sistem (termasuk protobuf-compiler untuk tonic gRPC dan curl untuk utoipa-swagger-ui)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    pkg-config libssl-dev \
+    pkg-config libssl-dev protobuf-compiler curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy manifest dulu untuk cache dependency layer
+# Copy manifest dan proto
 COPY Cargo.toml Cargo.lock ./
-COPY app/Cargo.toml          app/Cargo.toml
-COPY modules/auth/Cargo.toml modules/auth/Cargo.toml
+COPY app/Cargo.toml           app/Cargo.toml
+COPY modules/auth/Cargo.toml  modules/auth/Cargo.toml
+COPY modules/users/Cargo.toml modules/users/Cargo.toml
+COPY proto/                   proto/
 
-# Buat stub src agar cargo fetch bisa berjalan tanpa source asli
-RUN mkdir -p app/src modules/auth/src/internal \
-    && echo 'fn main() {}' > app/src/main.rs \
-    && echo ''              > modules/auth/src/lib.rs \
-    && echo ''              > modules/auth/src/internal/mod.rs \
-    && echo ''              > modules/auth/src/internal/repository.rs \
-    && echo ''              > modules/auth/src/internal/service.rs
-
-RUN cargo build --release -p app 2>/dev/null || true
-
-# Copy source asli dan compile ulang (hanya source yang berubah)
+# Copy source code lengkap
 COPY app/     app/
 COPY modules/ modules/
-COPY proto/   proto/
 
-RUN touch app/src/main.rs modules/auth/src/lib.rs \
-    && cargo build --release -p app
+# Compile seluruh binary release (app dan users_service)
+RUN cargo build --release --bins
 
 # ─────────────────────────────────────────────────────────────
 # Stage 2: Runtime — image minimal
@@ -49,9 +40,9 @@ USER appuser
 WORKDIR /app
 
 COPY --from=builder /app/target/release/app ./app
+COPY --from=builder /app/target/release/users_service ./users_service
 
 ENV RUST_LOG=info
-EXPOSE 8000
+EXPOSE 8000 8001
 
 CMD ["./app"]
-
