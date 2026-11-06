@@ -77,9 +77,9 @@ pub fn create_app(
 
     Router::new()
         .route("/", get(root))
-        .merge(auth::auth_routes(auth_client, jwt_secret, token_blacklist))
+        .merge(auth::auth_routes(auth_client.clone(), jwt_secret.clone(), token_blacklist))
         .merge(users::users_routes(users_client.clone()))
-        .merge(graphql::graphql_routes(users_client))
+        .merge(graphql::graphql_routes(users_client, auth_client, jwt_secret))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api_doc))
         .layer(cors)
         .layer(CookieManagerLayer::new())

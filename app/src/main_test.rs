@@ -126,5 +126,46 @@ async fn test_graphql_playground_and_operations() {
     let val: Value = serde_json::from_slice(&body).unwrap();
     let users = val["data"]["users"].as_array().unwrap();
     assert!(users.iter().any(|u| u["email"] == "john@example.com"));
+
+    // 5. POST /graphql (Mutation login)
+    let mutation_login = serde_json::to_vec(&json!({
+        "query": "mutation { login(input: { email: \"admin@example.com\", password: \"password123\" }) { token tokenType user { email role } } }"
+    })).unwrap();
+
+    let req_login = Request::builder()
+        .method("POST")
+        .uri("/graphql")
+        .header("content-type", "application/json")
+        .body(Body::from(mutation_login))
+        .unwrap();
+
+    let res = app.clone().oneshot(req_login).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let val: Value = serde_json::from_slice(&body).unwrap();
+    let login_data = &val["data"]["login"];
+    assert_eq!(login_data["tokenType"], "Bearer");
+    assert_eq!(login_data["user"]["email"], "admin@example.com");
+    let jwt_token = login_data["token"].as_str().unwrap();
+
+    // 6. POST /graphql (Query me with Authorization Bearer header)
+    let query_me = serde_json::to_vec(&json!({
+        "query": "{ me { email role } }"
+    })).unwrap();
+
+    let req_me = Request::builder()
+        .method("POST")
+        .uri("/graphql")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {jwt_token}"))
+        .body(Body::from(query_me))
+        .unwrap();
+
+    let res = app.oneshot(req_me).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let val: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(val["data"]["me"]["email"], "admin@example.com");
 }
+
 
