@@ -10,7 +10,9 @@ use axum::{
 use serde_json::{json, Value};
 use sqlx::postgres::PgPoolOptions;
 use tower_http::cors::CorsLayer;
-use tower_http::trace::TraceLayer;
+use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
+use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer};
+use tracing::Level;
 
 mod graphql;
 
@@ -50,12 +52,28 @@ pub fn create_app(
         ])
         .allow_credentials(true);
 
+    let x_request_id = axum::http::HeaderName::from_static("x-request-id");
+    let trace_layer = TraceLayer::new_for_http()
+        .make_span_with(
+            DefaultMakeSpan::new()
+                .level(Level::INFO)
+                .include_headers(true),
+        )
+        .on_request(DefaultOnRequest::new().level(Level::INFO))
+        .on_response(
+            DefaultOnResponse::new()
+                .level(Level::INFO)
+                .latency_unit(tower_http::LatencyUnit::Millis),
+        );
+
     Router::new()
         .route("/", get(root))
         .merge(graphql::graphql_routes(users_client, auth_client, jwt_secret, system_info.clone()))
         .layer(Extension(system_info))
         .layer(cors)
-        .layer(TraceLayer::new_for_http())
+        .layer(trace_layer)
+        .layer(PropagateRequestIdLayer::new(x_request_id.clone()))
+        .layer(SetRequestIdLayer::new(x_request_id, MakeRequestUuid))
 }
 
 #[tokio::main]

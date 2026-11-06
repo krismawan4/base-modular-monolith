@@ -31,7 +31,7 @@
             "uid": "loki-datasource"
           },
           "editorMode": "code",
-          "expr": "sum by (container_name) (rate({container_name=~\"$container\"}[1m]))",
+          "expr": "sum by (container_name) (rate({container_name=~\"$container\"} |~ \"(?i)$search\" |~ \"$request_id\" [1m]))",
           "legendFormat": "{{container_name}}",
           "queryType": "range",
           "refId": "A"
@@ -85,7 +85,7 @@
             "uid": "loki-datasource"
           },
           "editorMode": "code",
-          "expr": "{container_name=~\"$container\"}",
+          "expr": "{container_name=~\"$container\"} |~ \"(?i)$search\" |~ \"$request_id\"",
           "queryType": "range",
           "refId": "A"
         }
@@ -119,6 +119,7 @@
         "definition": "label_values(container_name)",
         "hide": 0,
         "includeAll": true,
+        "label": "Container",
         "multi": true,
         "name": "container",
         "options": [],
@@ -129,10 +130,48 @@
           "type": 1
         },
         "refresh": 1,
-        "regex": "",
+        "regex": "(modular_backend|modular_frontend|modular_postgres|modular_redis)",
         "skipUrlSync": false,
         "sort": 1,
         "type": "query"
+      },
+      {
+        "current": {
+          "selected": false,
+          "value": ""
+        },
+        "hide": 0,
+        "label": "🔍 Request ID",
+        "name": "request_id",
+        "options": [
+          {
+            "selected": false,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "query": "",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "selected": false,
+          "value": ""
+        },
+        "hide": 0,
+        "label": "🔎 Search Text",
+        "name": "search",
+        "options": [
+          {
+            "selected": false,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "query": "",
+        "skipUrlSync": false,
+        "type": "textbox"
       }
     ]
   },
@@ -152,5 +191,5 @@
   "timezone": "browser",
   "title": "Centralized Container Logs",
   "uid": "centralized-logs",
-  "version": 1
+  "version": 2
 }

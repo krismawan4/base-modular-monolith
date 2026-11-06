@@ -287,13 +287,25 @@ pub async fn graphql_handler(
     headers: HeaderMap,
     Json(mut req): Json<async_graphql::Request>,
 ) -> Json<async_graphql::Response> {
+    let operation = req.operation_name.clone().unwrap_or_else(|| "anonymous".to_string());
+    tracing::info!(operation = %operation, "Menjalankan GraphQL operation");
+
     if let Some(auth_val) = headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()) {
         if let Some(token) = auth_val.strip_prefix("Bearer ") {
             req = req.data(Token(token.trim().to_string()));
         }
     }
 
-    Json(schema.execute(req).await)
+    let response = schema.execute(req).await;
+    if !response.errors.is_empty() {
+        for err in &response.errors {
+            tracing::warn!(operation = %operation, error = %err.message, "GraphQL operation menghasilkan error");
+        }
+    } else {
+        tracing::info!(operation = %operation, "GraphQL operation selesai dengan sukses");
+    }
+
+    Json(response)
 }
 
 pub fn graphql_routes(

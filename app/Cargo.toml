@@ -9,7 +9,7 @@ users              = { path = "../modules/users" }
 tokio              = { workspace = true }
 axum               = { workspace = true }
 tower              = { version = "0.5", features = ["util"] }
-tower-http         = { version = "0.6", features = ["cors", "trace"] }
+tower-http         = { version = "0.6", features = ["cors", "trace", "request-id", "util"] }
 jsonwebtoken       = { workspace = true }
 bcrypt             = { workspace = true }
 chrono             = { workspace = true }

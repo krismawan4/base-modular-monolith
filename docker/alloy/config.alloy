@@ -45,9 +45,10 @@ loki.source.docker "default" {
 loki.process "filter_logs" {
   forward_to = [loki.write.loki_endpoint.receiver]
 
+  // Drop internal collector/monitoring logs to prevent noisy loops
   stage.drop {
     source     = "container_name"
-    expression = "modular_alloy"
+    expression = "modular_alloy|modular_loki"
   }
 }
 
