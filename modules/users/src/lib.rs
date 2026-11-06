@@ -91,6 +91,25 @@ pub fn build_in_memory_client() -> DynUsersClient {
     internal::service::UsersService::new_in_memory()
 }
 
+pub async fn build_grpc_client(addr: String) -> Result<DynUsersClient, UserError> {
+    internal::grpc::UsersGrpcClient::connect(addr).await
+}
+
+pub async fn run_grpc_server(
+    client: DynUsersClient,
+    addr: std::net::SocketAddr,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let service = internal::grpc::UsersGrpcServer::new(client);
+    let grpc_service = internal::grpc::proto::users_grpc_service_server::UsersGrpcServiceServer::new(service);
+
+    tonic::transport::Server::builder()
+        .add_service(grpc_service)
+        .serve(addr)
+        .await?;
+
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // HTTP Router
 // ---------------------------------------------------------------------------

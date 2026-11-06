@@ -14,6 +14,11 @@ sqlx          = { workspace = true }
 bcrypt        = { workspace = true }
 chrono        = { workspace = true }
 utoipa        = { workspace = true }
+tonic         = { workspace = true }
+prost         = { workspace = true }
+
+[build-dependencies]
+tonic-build   = { workspace = true }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

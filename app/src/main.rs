@@ -92,7 +92,7 @@ async fn main() {
         "postgres://postgres:password@127.0.0.1:5432/modular_monolith".to_string()
     });
 
-    let (auth_client, users_client) = match PgPoolOptions::new()
+    let (auth_client, local_users_client) = match PgPoolOptions::new()
         .max_connections(10)
         .acquire_timeout(std::time::Duration::from_secs(3))
         .connect(&database_url)
@@ -116,6 +116,16 @@ async fn main() {
             (auth::build_in_memory_client(), users::build_in_memory_client())
         }
     };
+
+    let users_client = if let Ok(grpc_url) = std::env::var("USERS_GRPC_URL") {
+        tracing::info!("Menggunakan Users Microservice via gRPC di {grpc_url}");
+        users::build_grpc_client(grpc_url)
+            .await
+            .expect("Gagal terhubung ke Users gRPC Microservice")
+    } else {
+        local_users_client
+    };
+
 
     let jwt_secret = Arc::new(std::env::var("JWT_SECRET").unwrap_or_else(|_| {
         "super_secret_jwt_key_that_is_at_least_32_characters_long!".to_string()

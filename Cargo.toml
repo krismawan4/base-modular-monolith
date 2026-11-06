@@ -23,4 +23,7 @@ utoipa-swagger-ui = { version = "8", features = ["axum"] }
 redis         = { version = "0.28", default-features = false, features = ["tokio-comp", "connection-manager"] }
 sha2          = "0.10"
 async-graphql = "7.2"
+tonic         = "0.12"
+prost         = "0.13"
+tonic-build   = "0.12"
 
