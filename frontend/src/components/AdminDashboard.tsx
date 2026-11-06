@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import {
-  Users, ShieldCheck, Key, Activity,
+  Users, ShieldCheck, Key, Activity, Server, Database,
   LayoutDashboard, Settings, LogOut, Menu, X, Loader2,
   Plus, Pencil, Trash2, Search, RefreshCw, AlertCircle, CheckCircle2,
+  ExternalLink, ArrowRight, UserPlus,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -19,20 +20,25 @@ import {
   USERS_QUERY, ME_QUERY, CREATE_USER_MUTATION, UPDATE_USER_MUTATION, DELETE_USER_MUTATION,
 } from '@/lib/graphql';
 
-const NAV = [
-  { label: 'Dashboard',   icon: LayoutDashboard, href: '/admin/' },
-  { label: 'Users',       icon: Users,            href: '/admin/' },
-  { label: 'Settings',    icon: Settings,         href: '/admin/' },
-];
+interface AdminDashboardProps {
+  initialTab?: 'dashboard' | 'users' | 'settings';
+}
 
-export default function AdminDashboard() {
+const NAV_ITEMS = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/admin/dashboard/' },
+  { id: 'users',     label: 'Users',     icon: Users,           href: '/admin/users/' },
+  { id: 'settings',  label: 'Settings',  icon: Settings,        href: '#settings' },
+] as const;
+
+export default function AdminDashboard({ initialTab = 'dashboard' }: AdminDashboardProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [currentTab, setCurrentTab] = useState<'dashboard' | 'users' | 'settings'>(initialTab);
   const [currentUser, setCurrentUser] = useState<GqlUser | null>(null);
   const [usersList, setUsersList] = useState<GqlUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Search & Filter
+  // Search & Filter (Users Tab)
   const [searchQuery, setSearchQuery] = useState('');
 
   // Notification state
@@ -41,7 +47,7 @@ export default function AdminDashboard() {
     message: string;
   } | null>(null);
 
-  // Modal States
+  // Modal States (User CRUD)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<GqlUser | null>(null);
   const [formName, setFormName] = useState('');
@@ -92,6 +98,18 @@ export default function AdminDashboard() {
     if (cached) setCurrentUser(cached);
 
     fetchUsers();
+  }, []);
+
+  // Sync tab if URL changes or initialTab provided
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      if (path.includes('/admin/users')) {
+        setCurrentTab('users');
+      } else if (path.includes('/admin/dashboard')) {
+        setCurrentTab('dashboard');
+      }
+    }
   }, []);
 
   // Auto-dismiss notification
@@ -226,7 +244,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // Filtered users
+  // Filtered users for Users Table
   const filteredUsers = useMemo(() => {
     if (!searchQuery.trim()) return usersList;
     const query = searchQuery.toLowerCase();
@@ -238,6 +256,11 @@ export default function AdminDashboard() {
         u.id.toLowerCase().includes(query)
     );
   }, [usersList, searchQuery]);
+
+  // Top recent 5 users for Dashboard
+  const recentUsers = useMemo(() => {
+    return usersList.slice(0, 5);
+  }, [usersList]);
 
   const stats = [
     { label: 'Total User (Live GraphQL)', value: String(usersList.length), icon: Users, delta: 'Data real-time backend' },
@@ -265,24 +288,46 @@ export default function AdminDashboard() {
           </Badge>
         </div>
 
-        {/* Nav */}
+        {/* Navigation Items (Single Active Selection) */}
         <nav className="flex-1 space-y-1 p-4">
-          {NAV.map(({ label, icon: Icon, href }) => (
-            <a
-              key={label}
-              href={href}
-              className={`
-                flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors
-                ${label === 'Users' || label === 'Dashboard'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
-              `}
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </a>
-          ))}
+          {NAV_ITEMS.map(({ id, label, icon: Icon, href }) => {
+            const isActive = currentTab === id;
+            return (
+              <a
+                key={id}
+                href={href}
+                onClick={e => {
+                  if (id === 'settings') {
+                    e.preventDefault();
+                    setCurrentTab('settings');
+                  }
+                }}
+                className={`
+                  flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors
+                  ${isActive
+                    ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
+                `}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </a>
+            );
+          })}
         </nav>
+
+        {/* Quick External Link */}
+        <div className="px-4 py-2 border-t">
+          <a
+            href="http://127.0.0.1:8000/graphql"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-between text-xs text-muted-foreground hover:text-foreground py-2 px-2 rounded hover:bg-muted transition-colors"
+          >
+            <span>GraphQL Playground</span>
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
 
         {/* Logout */}
         <div className="border-t p-4">
@@ -304,7 +349,7 @@ export default function AdminDashboard() {
         />
       )}
 
-      {/* ── Main Content ── */}
+      {/* ── Main Content Container ── */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Topbar */}
         <header className="flex h-16 items-center border-b bg-white px-6 gap-4">
@@ -315,9 +360,20 @@ export default function AdminDashboard() {
             {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
           <div>
-            <h1 className="text-base font-semibold">Admin Panel</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-base font-semibold capitalize">
+                {currentTab === 'dashboard' && 'Dashboard Overview'}
+                {currentTab === 'users' && 'Manajemen Pengguna (CRUD)'}
+                {currentTab === 'settings' && 'Pengaturan Sistem'}
+              </h1>
+              <Badge variant="outline" className="text-[11px] font-mono">
+                {currentTab === 'dashboard' && '/admin/dashboard'}
+                {currentTab === 'users' && '/admin/users'}
+                {currentTab === 'settings' && '/admin/settings'}
+              </Badge>
+            </div>
             <p className="text-xs text-muted-foreground">
-              Terhubung ke GraphQL: <code>/graphql</code>
+              Protokol Aktif: GraphQL <code>/graphql</code> & gRPC <code>:8001</code>
             </p>
           </div>
           <div className="ml-auto flex items-center gap-3">
@@ -364,153 +420,382 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* Stats Cards */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {stats.map(({ label, value, icon: Icon, delta }) => (
-              <Card key={label}>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    {label}
-                  </CardTitle>
-                  <Icon className="h-4 w-4 text-muted-foreground" />
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* TAB 1: DASHBOARD OVERVIEW                                        */}
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {currentTab === 'dashboard' && (
+            <div className="space-y-6">
+              {/* Stats Cards */}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {stats.map(({ label, value, icon: Icon, delta }) => (
+                  <Card key={label}>
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">
+                        {label}
+                      </CardTitle>
+                      <Icon className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{value}</div>
+                      <p className="mt-1 text-xs text-muted-foreground">{delta}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {/* System Architecture & Status Overview */}
+              <div className="grid gap-6 md:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Server className="h-4 w-4 text-primary" />
+                      Status Komponen Backend & Layanan
+                    </CardTitle>
+                    <CardDescription>
+                      Arsitektur Modular Monolith dengan gRPC Microservices
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                      <div>
+                        <div className="text-sm font-medium">GraphQL Gateway Server</div>
+                        <div className="text-xs text-muted-foreground">Port 8000 (Async-GraphQL + Axum)</div>
+                      </div>
+                      <Badge variant="default">Online</Badge>
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                      <div>
+                        <div className="text-sm font-medium">Users Microservice (gRPC)</div>
+                        <div className="text-xs text-muted-foreground">Port 8001 (Tonic Protobuf Service)</div>
+                      </div>
+                      <Badge variant="default">Terhubung</Badge>
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                      <div>
+                        <div className="text-sm font-medium">PostgreSQL & In-Memory Store</div>
+                        <div className="text-xs text-muted-foreground">Persistensi Data Pengguna & RBAC</div>
+                      </div>
+                      <Badge variant="secondary">Aktif</Badge>
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                      <div>
+                        <div className="text-sm font-medium">Redis Token Blacklist</div>
+                        <div className="text-xs text-muted-foreground">Revokasi JWT Logout Sesi</div>
+                      </div>
+                      <Badge variant="secondary">Siap</Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Quick Actions Card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Activity className="h-4 w-4 text-primary" />
+                      Aksi Cepat Admin
+                    </CardTitle>
+                    <CardDescription>Pintasan untuk operasi sistem dan manajemen data</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <a
+                      href="/admin/users/"
+                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-9 w-9 rounded-md bg-primary/10 text-primary flex items-center justify-center">
+                          <Users className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium group-hover:text-primary transition-colors">
+                            Buka Manajemen Pengguna (CRUD)
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Tambah, cari, ubah, dan hapus data user via GraphQL
+                          </div>
+                        </div>
+                      </div>
+                      <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-1 transition-all" />
+                    </a>
+
+                    <button
+                      onClick={handleOpenCreateModal}
+                      className="w-full text-left flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-9 w-9 rounded-md bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+                          <UserPlus className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium group-hover:text-emerald-600 transition-colors">
+                            Tambah Pengguna Baru Sekarang
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Buat akun admin atau member baru langsung dari dashboard
+                          </div>
+                        </div>
+                      </div>
+                      <Plus className="h-4 w-4 text-muted-foreground" />
+                    </button>
+
+                    <a
+                      href="http://127.0.0.1:8000/graphql"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-9 w-9 rounded-md bg-purple-500/10 text-purple-600 flex items-center justify-center">
+                          <Key className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium group-hover:text-purple-600 transition-colors">
+                            Buka GraphiQL Playground
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            IDE interaktif untuk query dan test mutasi GraphQL
+                          </div>
+                        </div>
+                      </div>
+                      <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                    </a>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Recent Users Preview Card */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base">Pengguna Terbaru (Snapshot)</CardTitle>
+                    <CardDescription>
+                      Daftar 5 akun pengguna terbaru yang tercatat di backend
+                    </CardDescription>
+                  </div>
+                  <a href="/admin/users/">
+                    <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                      <span>Kelola Semua Pengguna</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </a>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{value}</div>
-                  <p className="mt-1 text-xs text-muted-foreground">{delta}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {/* User Table (CRUD Live GraphQL) */}
-          <Card>
-            <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <CardTitle>Manajemen Pengguna (CRUD Users)</CardTitle>
-                <CardDescription>
-                  Kelola data pengguna secara langsung melalui mutasi & query GraphQL
-                </CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={fetchUsers}
-                  disabled={refreshing}
-                  className="gap-1.5"
-                >
-                  <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                  <span className="hidden sm:inline">Refresh</span>
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleOpenCreateModal}
-                  className="gap-1.5"
-                >
-                  <Plus className="h-4 w-4" />
-                  Tambah Pengguna
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Search Bar */}
-              <div className="flex items-center gap-2 max-w-sm">
-                <div className="relative w-full">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <input
-                    type="text"
-                    placeholder="Cari berdasarkan nama, email, role..."
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    className="flex h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  />
-                </div>
-              </div>
-
-              {/* Table */}
-              {loading ? (
-                <div className="flex items-center justify-center py-12 text-muted-foreground">
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Mengambil data pengguna dari GraphQL...
-                </div>
-              ) : (
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nama</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Role</TableHead>
-                        <TableHead className="hidden md:table-cell">ID</TableHead>
-                        <TableHead className="text-right">Aksi</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredUsers.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                            {searchQuery ? 'Tidak ada pengguna yang cocok dengan pencarian.' : 'Belum ada pengguna.'}
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        filteredUsers.map(user => {
-                          const isSelf = currentUser?.id === user.id;
-                          return (
-                            <TableRow key={user.id}>
-                              <TableCell className="font-medium">
-                                <div className="flex items-center gap-2">
-                                  <span>{user.name}</span>
-                                  {isSelf && (
-                                    <Badge variant="outline" className="text-[10px] py-0">
-                                      Anda
-                                    </Badge>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell>{user.email}</TableCell>
-                              <TableCell>
-                                <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
-                                  {user.role}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="font-mono text-xs text-muted-foreground hidden md:table-cell">
-                                {user.id}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <div className="flex items-center justify-end gap-1.5">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleOpenEditModal(user)}
-                                    className="h-8 px-2 text-xs gap-1"
-                                    title="Edit Pengguna"
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                    <span className="hidden sm:inline">Edit</span>
-                                  </Button>
-                                  <Button
-                                    variant="destructive"
-                                    size="sm"
-                                    onClick={() => handleOpenDeleteModal(user)}
-                                    className="h-8 px-2 text-xs gap-1"
-                                    title={isSelf ? 'Tidak dapat menghapus akun sendiri' : 'Hapus Pengguna'}
-                                    disabled={isSelf}
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                    <span className="hidden sm:inline">Hapus</span>
-                                  </Button>
-                                </div>
+                  {loading ? (
+                    <div className="flex items-center justify-center py-6 text-muted-foreground">
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Memuat data pengguna...
+                    </div>
+                  ) : (
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Nama</TableHead>
+                            <TableHead>Email</TableHead>
+                            <TableHead>Role</TableHead>
+                            <TableHead className="hidden sm:table-cell">ID</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {recentUsers.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">
+                                Belum ada pengguna.
                               </TableCell>
                             </TableRow>
-                          );
-                        })
-                      )}
-                    </TableBody>
-                  </Table>
+                          ) : (
+                            recentUsers.map(user => (
+                              <TableRow key={user.id}>
+                                <TableCell className="font-medium">{user.name}</TableCell>
+                                <TableCell>{user.email}</TableCell>
+                                <TableCell>
+                                  <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
+                                    {user.role}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="font-mono text-xs text-muted-foreground hidden sm:table-cell">
+                                  {user.id}
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* TAB 2: USERS CRUD MANAGEMENT                                     */}
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {currentTab === 'users' && (
+            <Card>
+              <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <CardTitle>Manajemen Pengguna (CRUD Users)</CardTitle>
+                  <CardDescription>
+                    Kelola data pengguna secara langsung melalui mutasi & query GraphQL
+                  </CardDescription>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={fetchUsers}
+                    disabled={refreshing}
+                    className="gap-1.5"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                    <span className="hidden sm:inline">Refresh</span>
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleOpenCreateModal}
+                    className="gap-1.5"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Tambah Pengguna
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Search Bar */}
+                <div className="flex items-center gap-2 max-w-sm">
+                  <div className="relative w-full">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <input
+                      type="text"
+                      placeholder="Cari berdasarkan nama, email, role..."
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      className="flex h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    />
+                  </div>
+                </div>
+
+                {/* Table */}
+                {loading ? (
+                  <div className="flex items-center justify-center py-12 text-muted-foreground">
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Mengambil data pengguna dari GraphQL...
+                  </div>
+                ) : (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nama</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Role</TableHead>
+                          <TableHead className="hidden md:table-cell">ID</TableHead>
+                          <TableHead className="text-right">Aksi</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredUsers.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                              {searchQuery ? 'Tidak ada pengguna yang cocok dengan pencarian.' : 'Belum ada pengguna.'}
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          filteredUsers.map(user => {
+                            const isSelf = currentUser?.id === user.id;
+                            return (
+                              <TableRow key={user.id}>
+                                <TableCell className="font-medium">
+                                  <div className="flex items-center gap-2">
+                                    <span>{user.name}</span>
+                                    {isSelf && (
+                                      <Badge variant="outline" className="text-[10px] py-0">
+                                        Anda
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell>{user.email}</TableCell>
+                                <TableCell>
+                                  <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
+                                    {user.role}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="font-mono text-xs text-muted-foreground hidden md:table-cell">
+                                  {user.id}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleOpenEditModal(user)}
+                                      className="h-8 px-2 text-xs gap-1"
+                                      title="Edit Pengguna"
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                      <span className="hidden sm:inline">Edit</span>
+                                    </Button>
+                                    <Button
+                                      variant="destructive"
+                                      size="sm"
+                                      onClick={() => handleOpenDeleteModal(user)}
+                                      className="h-8 px-2 text-xs gap-1"
+                                      title={isSelf ? 'Tidak dapat menghapus akun sendiri' : 'Hapus Pengguna'}
+                                      disabled={isSelf}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                      <span className="hidden sm:inline">Hapus</span>
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* TAB 3: SETTINGS                                                  */}
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {currentTab === 'settings' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Pengaturan & Info Sesi</CardTitle>
+                <CardDescription>Informasi detail akun terautentikasi dan konfigurasi API</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="p-4 rounded-lg border bg-muted/20 space-y-1">
+                    <div className="text-xs text-muted-foreground font-medium">User Terautentikasi</div>
+                    <div className="text-sm font-semibold">{currentUser?.name || '-'}</div>
+                    <div className="text-xs text-muted-foreground">{currentUser?.email || '-'}</div>
+                  </div>
+                  <div className="p-4 rounded-lg border bg-muted/20 space-y-1">
+                    <div className="text-xs text-muted-foreground font-medium">Role & Hak Akses</div>
+                    <div className="text-sm font-semibold capitalize">{currentUser?.role || '-'}</div>
+                    <div className="text-xs text-muted-foreground">Akses Penuh Manajemen Pengguna</div>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-lg border bg-muted/20 space-y-2">
+                  <div className="text-xs text-muted-foreground font-medium">Endpoint GraphQL</div>
+                  <div className="font-mono text-xs bg-background p-2 rounded border">
+                    http://127.0.0.1:8000/graphql
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </main>
       </div>
 

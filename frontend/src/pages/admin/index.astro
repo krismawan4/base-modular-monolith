@@ -1,9 +1,17 @@
 ---
-import Layout from '../../layouts/Layout.astro';
-import AdminDashboard from '../../components/AdminDashboard';
+return Astro.redirect('/admin/dashboard/');
 ---
-
-<Layout title="Admin Dashboard — ModularBase">
-  <AdminDashboard client:load />
-</Layout>
-
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="refresh" content="0;url=/admin/dashboard/" />
+    <title>Mengalihkan ke Dashboard...</title>
+    <script>
+      window.location.replace('/admin/dashboard/');
+    </script>
+  </head>
+  <body>
+    <p>Mengalihkan ke <a href="/admin/dashboard/">/admin/dashboard/</a>...</p>
+  </body>
+</html>
