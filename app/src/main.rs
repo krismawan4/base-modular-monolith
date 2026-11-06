@@ -59,8 +59,14 @@ pub fn create_app(
         ),
     );
 
+    let cors_origin = std::env::var("CORS_ALLOWED_ORIGIN")
+        .unwrap_or_else(|_| "http://localhost:5173".to_string());
+    let origin_header = cors_origin
+        .parse::<HeaderValue>()
+        .unwrap_or_else(|_| HeaderValue::from_static("http://localhost:5173"));
+
     let cors = CorsLayer::new()
-        .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
+        .allow_origin(origin_header)
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
         .allow_headers([
             header::AUTHORIZATION,
@@ -90,9 +96,8 @@ async fn main() {
         )
         .init();
 
-    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
-        "postgres://postgres:password@127.0.0.1:5432/modular_monolith".to_string()
-    });
+    let database_url = std::env::var("DATABASE_URL")
+        .expect("DATABASE_URL wajib disetel di dalam file .env");
 
     let (auth_client, local_users_client) = match PgPoolOptions::new()
         .max_connections(10)

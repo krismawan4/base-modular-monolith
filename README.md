@@ -53,6 +53,9 @@ HOST=127.0.0.1
 PORT=8000
 RUST_LOG=info
 
+# CORS Configuration (Origin frontend yang diizinkan)
+CORS_ALLOWED_ORIGIN=http://localhost:5173
+
 # JWT Secret
 JWT_SECRET=super_secret_jwt_key_that_is_at_least_32_characters_long!
 
