@@ -27,6 +27,94 @@ export interface GqlMeResponse {
   me: GqlUser | null;
 }
 
+export interface CreateUserInput {
+  name: string;
+  email: string;
+  password?: string;
+  role?: string;
+}
+
+export interface UpdateUserInput {
+  name?: string;
+  email?: string;
+  password?: string;
+  role?: string;
+}
+
+export interface GqlCreateUserResponse {
+  createUser: GqlUser;
+}
+
+export interface GqlUpdateUserResponse {
+  updateUser: GqlUser;
+}
+
+export interface GqlDeleteUserResponse {
+  deleteUser: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// GraphQL Queries & Mutations
+// ---------------------------------------------------------------------------
+
+export const USERS_QUERY = `
+  query GetUsers {
+    users {
+      id
+      name
+      email
+      role
+      createdAt
+    }
+  }
+`;
+
+export const ME_QUERY = `
+  query GetMe {
+    me {
+      id
+      name
+      email
+      role
+      createdAt
+    }
+  }
+`;
+
+export const CREATE_USER_MUTATION = `
+  mutation CreateUser($input: CreateUserGqlInput!) {
+    createUser(input: $input) {
+      id
+      name
+      email
+      role
+      createdAt
+    }
+  }
+`;
+
+export const UPDATE_USER_MUTATION = `
+  mutation UpdateUser($id: String!, $input: UpdateUserGqlInput!) {
+    updateUser(id: $id, input: $input) {
+      id
+      name
+      email
+      role
+      createdAt
+    }
+  }
+`;
+
+export const DELETE_USER_MUTATION = `
+  mutation DeleteUser($id: String!) {
+    deleteUser(id: $id)
+  }
+`;
+
+// ---------------------------------------------------------------------------
+// Network Request & Auth Helpers
+// ---------------------------------------------------------------------------
+
 export async function graphqlRequest<T = any>(
   query: string,
   variables: Record<string, any> = {},
@@ -81,4 +169,3 @@ export function getAuthUser(): GqlUser | null {
     return null;
   }
 }
-

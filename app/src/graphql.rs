@@ -58,6 +58,14 @@ pub struct CreateUserGqlInput {
     pub role:     Option<String>,
 }
 
+#[derive(InputObject)]
+pub struct UpdateUserGqlInput {
+    pub name:     Option<String>,
+    pub email:    Option<String>,
+    pub password: Option<String>,
+    pub role:     Option<String>,
+}
+
 // ---------------------------------------------------------------------------
 // 2. Query Root
 // ---------------------------------------------------------------------------
@@ -169,6 +177,30 @@ impl MutationRoot {
             .map_err(|e| async_graphql::Error::new(e.to_string()))?;
 
         Ok(UserType::from(created))
+    }
+
+    /// Mengubah data user berdasarkan ID
+    async fn update_user(
+        &self,
+        ctx: &Context<'_>,
+        id: String,
+        input: UpdateUserGqlInput,
+    ) -> async_graphql::Result<UserType> {
+        let users_client = ctx.data::<DynUsersClient>()?;
+        let updated = users_client
+            .update_user(
+                &id,
+                users::UpdateUserInput {
+                    name:     input.name,
+                    email:    input.email,
+                    password: input.password,
+                    role:     input.role,
+                },
+            )
+            .await
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+
+        Ok(UserType::from(updated))
     }
 
     /// Menghapus user berdasarkan ID

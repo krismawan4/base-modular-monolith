@@ -88,7 +88,7 @@ async fn test_graphql_playground_and_operations() {
 
     // 4. POST /graphql (Query users)
     let query_users = serde_json::to_vec(&json!({
-        "query": "{ users { name email } }"
+        "query": "{ users { id name email } }"
     })).unwrap();
 
     let req_users = Request::builder()
@@ -139,9 +139,46 @@ async fn test_graphql_playground_and_operations() {
         .body(Body::from(query_me))
         .unwrap();
 
-    let res = app.oneshot(req_me).await.unwrap();
+    let res = app.clone().oneshot(req_me).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
     let body = res.into_body().collect().await.unwrap().to_bytes();
     let val: Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(val["data"]["me"]["email"], "admin@example.com");
+
+    // 7. POST /graphql (Mutation updateUser)
+    let created_id = users.iter().find(|u| u["email"] == "john@example.com").unwrap()["id"].as_str().unwrap();
+    let mutation_update = serde_json::to_vec(&json!({
+        "query": format!(r#"mutation {{ updateUser(id: "{}", input: {{ name: "John Doe Updated" }}) {{ id name email }} }}"#, created_id)
+    })).unwrap();
+
+    let req_update = Request::builder()
+        .method("POST")
+        .uri("/graphql")
+        .header("content-type", "application/json")
+        .body(Body::from(mutation_update))
+        .unwrap();
+
+    let res = app.clone().oneshot(req_update).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let val: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(val["data"]["updateUser"]["name"], "John Doe Updated");
+
+    // 8. POST /graphql (Mutation deleteUser)
+    let mutation_delete = serde_json::to_vec(&json!({
+        "query": format!(r#"mutation {{ deleteUser(id: "{}") }}"#, created_id)
+    })).unwrap();
+
+    let req_delete = Request::builder()
+        .method("POST")
+        .uri("/graphql")
+        .header("content-type", "application/json")
+        .body(Body::from(mutation_delete))
+        .unwrap();
+
+    let res = app.oneshot(req_delete).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let val: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(val["data"]["deleteUser"], true);
 }
