@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use axum::{
+    extract::Extension,
     http::{header, HeaderValue, Method},
     routing::get,
     Json, Router,
@@ -13,22 +14,25 @@ use tower_http::trace::TraceLayer;
 
 mod graphql;
 
-async fn root() -> Json<Value> {
+async fn root(Extension(system_info): Extension<Arc<graphql::SystemInfo>>) -> Json<Value> {
     Json(json!({
         "status": "success",
         "data": {
             "service": "modular-monolith-api",
             "version": env!("CARGO_PKG_VERSION"),
+            "architecture": system_info.architecture,
+            "users_mode": system_info.users_mode,
             "graphql_playground": "/graphql"
         }
     }))
 }
 
 pub fn create_app(
-    auth_client:     auth::DynAuthClient,
-    users_client:    users::DynUsersClient,
-    jwt_secret:      Arc<String>,
+    auth_client:      auth::DynAuthClient,
+    users_client:     users::DynUsersClient,
+    jwt_secret:       Arc<String>,
     _token_blacklist: auth::DynTokenBlacklist,
+    system_info:      Arc<graphql::SystemInfo>,
 ) -> Router {
     let cors_origin = std::env::var("CORS_ALLOWED_ORIGIN")
         .unwrap_or_else(|_| "http://localhost:5173".to_string());
@@ -48,7 +52,8 @@ pub fn create_app(
 
     Router::new()
         .route("/", get(root))
-        .merge(graphql::graphql_routes(users_client, auth_client, jwt_secret))
+        .merge(graphql::graphql_routes(users_client, auth_client, jwt_secret, system_info.clone()))
+        .layer(Extension(system_info))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
 }
@@ -91,14 +96,20 @@ async fn main() {
         }
     };
 
-    let users_client = if let Ok(grpc_url) = std::env::var("USERS_GRPC_URL") {
+    let (users_client, users_mode, architecture) = if let Ok(grpc_url) = std::env::var("USERS_GRPC_URL") {
         tracing::info!("Menggunakan Users Microservice via gRPC di {grpc_url}");
-        users::build_grpc_client(grpc_url)
+        let client = users::build_grpc_client(grpc_url.clone())
             .await
-            .expect("Gagal terhubung ke Users gRPC Microservice")
+            .expect("Gagal terhubung ke Users gRPC Microservice");
+        (client, format!("Microservice via gRPC ({grpc_url})"), "Microservice (Hybrid)".to_string())
     } else {
-        local_users_client
+        (local_users_client, "In-Process (Modular Monolith)".to_string(), "Modular Monolith".to_string())
     };
+
+    let system_info = Arc::new(graphql::SystemInfo {
+        architecture,
+        users_mode,
+    });
 
     let jwt_secret = Arc::new(std::env::var("JWT_SECRET").unwrap_or_else(|_| {
         "super_secret_jwt_key_that_is_at_least_32_characters_long!".to_string()
@@ -122,7 +133,7 @@ async fn main() {
         }
     };
 
-    let app = create_app(auth_client, users_client, jwt_secret, token_blacklist);
+    let app = create_app(auth_client, users_client, jwt_secret, token_blacklist, system_info);
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let port: u16 = std::env::var("PORT")

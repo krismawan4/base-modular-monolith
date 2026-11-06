@@ -13,6 +13,31 @@ use users::DynUsersClient;
 // 1. GraphQL Types & Inputs
 // ---------------------------------------------------------------------------
 
+#[derive(Clone, Debug)]
+pub struct SystemInfo {
+    pub architecture: String,
+    pub users_mode: String,
+}
+
+impl Default for SystemInfo {
+    fn default() -> Self {
+        Self {
+            architecture: "Modular Monolith".to_string(),
+            users_mode: "In-Process (Modular Monolith)".to_string(),
+        }
+    }
+}
+
+#[derive(SimpleObject, Clone, Debug)]
+pub struct SystemStatusType {
+    pub service_name:     String,
+    pub version:          String,
+    pub architecture:     String,
+    pub users_mode:       String,
+    pub graphql_endpoint: String,
+    pub message:          String,
+}
+
 #[derive(Clone)]
 pub struct Token(pub String);
 
@@ -77,6 +102,20 @@ impl QueryRoot {
     /// Endpoint testing sederhana
     async fn hello(&self) -> &str {
         "Hello from Axum GraphQL!"
+    }
+
+    /// Mengambil status sistem backend dan mode arsitektur secara dinamis
+    async fn system_status(&self, ctx: &Context<'_>) -> async_graphql::Result<SystemStatusType> {
+        let info = ctx.data::<Arc<SystemInfo>>()?;
+        let message = format!("{} • {}", info.architecture, info.users_mode);
+        Ok(SystemStatusType {
+            service_name:     "ModularBase API".to_string(),
+            version:          env!("CARGO_PKG_VERSION").to_string(),
+            architecture:     info.architecture.clone(),
+            users_mode:       info.users_mode.clone(),
+            graphql_endpoint: "/graphql".to_string(),
+            message,
+        })
     }
 
     /// Mengambil profile user yang sedang login (memvalidasi JWT Bearer dari context)
@@ -225,11 +264,13 @@ pub fn build_schema(
     users_client: DynUsersClient,
     auth_client:  auth::DynAuthClient,
     jwt_secret:   Arc<String>,
+    system_info:  Arc<SystemInfo>,
 ) -> AppSchema {
     Schema::build(QueryRoot, MutationRoot, EmptySubscription)
         .data(users_client)
         .data(auth_client)
         .data(jwt_secret)
+        .data(system_info)
         .finish()
 }
 
@@ -259,8 +300,9 @@ pub fn graphql_routes(
     users_client: DynUsersClient,
     auth_client:  auth::DynAuthClient,
     jwt_secret:   Arc<String>,
+    system_info:  Arc<SystemInfo>,
 ) -> Router {
-    let schema = Arc::new(build_schema(users_client, auth_client, jwt_secret));
+    let schema = Arc::new(build_schema(users_client, auth_client, jwt_secret, system_info));
     Router::new()
         .route("/graphql", get(graphql_playground).post(graphql_handler))
         .layer(Extension(schema))

@@ -53,9 +53,35 @@ export interface GqlDeleteUserResponse {
   deleteUser: boolean;
 }
 
+export interface GqlSystemStatus {
+  serviceName: string;
+  version: string;
+  architecture: string;
+  usersMode: string;
+  graphqlEndpoint: string;
+  message: string;
+}
+
+export interface GqlSystemStatusResponse {
+  systemStatus: GqlSystemStatus;
+}
+
 // ---------------------------------------------------------------------------
 // GraphQL Queries & Mutations
 // ---------------------------------------------------------------------------
+
+export const SYSTEM_STATUS_QUERY = `
+  query GetSystemStatus {
+    systemStatus {
+      serviceName
+      version
+      architecture
+      usersMode
+      graphqlEndpoint
+      message
+    }
+  }
+`;
 
 export const USERS_QUERY = `
   query GetUsers {

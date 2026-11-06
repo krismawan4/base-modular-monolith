@@ -12,8 +12,9 @@ async fn test_root_endpoint() {
     let users_client = users::build_in_memory_client();
     let jwt_secret = Arc::new("test_secret_key_that_is_at_least_32_characters_long!".to_string());
     let blacklist = auth::build_in_memory_blacklist();
+    let system_info = Arc::new(graphql::SystemInfo::default());
 
-    let app = create_app(auth_client, users_client, jwt_secret, blacklist);
+    let app = create_app(auth_client, users_client, jwt_secret, blacklist, system_info);
 
     let req = Request::builder()
         .method("GET")
@@ -28,6 +29,8 @@ async fn test_root_endpoint() {
     let json: Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(json["status"], "success");
     assert_eq!(json["data"]["service"], "modular-monolith-api");
+    assert_eq!(json["data"]["architecture"], "Modular Monolith");
+    assert_eq!(json["data"]["users_mode"], "In-Process (Modular Monolith)");
     assert_eq!(json["data"]["graphql_playground"], "/graphql");
 }
 
@@ -37,8 +40,9 @@ async fn test_graphql_playground_and_operations() {
     let users_client = users::build_in_memory_client();
     let jwt_secret = Arc::new("test_secret_key_that_is_at_least_32_characters_long!".to_string());
     let blacklist = auth::build_in_memory_blacklist();
+    let system_info = Arc::new(graphql::SystemInfo::default());
 
-    let app = create_app(auth_client, users_client, jwt_secret, blacklist);
+    let app = create_app(auth_client, users_client, jwt_secret, blacklist, system_info);
 
     // 1. GET /graphql (Playground UI)
     let req_playground = Request::builder()
@@ -66,6 +70,25 @@ async fn test_graphql_playground_and_operations() {
     let body = res.into_body().collect().await.unwrap().to_bytes();
     let val: Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(val["data"]["hello"], "Hello from Axum GraphQL!");
+
+    // 2b. POST /graphql (Query systemStatus)
+    let query_status = serde_json::to_vec(&json!({
+        "query": "{ systemStatus { architecture usersMode message } }"
+    })).unwrap();
+
+    let req_status = Request::builder()
+        .method("POST")
+        .uri("/graphql")
+        .header("content-type", "application/json")
+        .body(Body::from(query_status))
+        .unwrap();
+
+    let res = app.clone().oneshot(req_status).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let val: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(val["data"]["systemStatus"]["architecture"], "Modular Monolith");
+    assert_eq!(val["data"]["systemStatus"]["usersMode"], "In-Process (Modular Monolith)");
 
     // 3. POST /graphql (Mutation createUser)
     let mutation_create = serde_json::to_vec(&json!({

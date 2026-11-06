@@ -17,7 +17,9 @@ import {
   getAuthToken, getAuthUser, clearAuthSession, graphqlRequest,
   type GqlUser, type GqlUsersResponse, type GqlMeResponse,
   type GqlCreateUserResponse, type GqlUpdateUserResponse, type GqlDeleteUserResponse,
+  type GqlSystemStatus, type GqlSystemStatusResponse,
   USERS_QUERY, ME_QUERY, CREATE_USER_MUTATION, UPDATE_USER_MUTATION, DELETE_USER_MUTATION,
+  SYSTEM_STATUS_QUERY,
 } from '@/lib/graphql';
 
 interface AdminDashboardProps {
@@ -35,6 +37,7 @@ export default function AdminDashboard({ initialTab = 'dashboard' }: AdminDashbo
   const [currentTab, setCurrentTab] = useState<'dashboard' | 'users' | 'settings'>(initialTab);
   const [currentUser, setCurrentUser] = useState<GqlUser | null>(null);
   const [usersList, setUsersList] = useState<GqlUser[]>([]);
+  const [systemStatus, setSystemStatus] = useState<GqlSystemStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -68,9 +71,10 @@ export default function AdminDashboard({ initialTab = 'dashboard' }: AdminDashbo
 
     try {
       setRefreshing(true);
-      const [meData, usersData] = await Promise.all([
+      const [meData, usersData, statusData] = await Promise.all([
         graphqlRequest<GqlMeResponse>(ME_QUERY, {}, token).catch(() => null),
         graphqlRequest<GqlUsersResponse>(USERS_QUERY, {}, token).catch(() => ({ users: [] })),
+        graphqlRequest<GqlSystemStatusResponse>(SYSTEM_STATUS_QUERY, {}, token).catch(() => null),
       ]);
 
       if (meData?.me) {
@@ -78,6 +82,9 @@ export default function AdminDashboard({ initialTab = 'dashboard' }: AdminDashbo
       }
       if (usersData?.users) {
         setUsersList(usersData.users);
+      }
+      if (statusData?.systemStatus) {
+        setSystemStatus(statusData.systemStatus);
       }
     } catch (err) {
       console.error('Failed to load GraphQL data:', err);
@@ -265,7 +272,7 @@ export default function AdminDashboard({ initialTab = 'dashboard' }: AdminDashbo
   const stats = [
     { label: 'Total User (Live GraphQL)', value: String(usersList.length), icon: Users, delta: 'Data real-time backend' },
     { label: 'User Role',                 value: currentUser?.role || 'Admin', icon: ShieldCheck, delta: 'Role terautentikasi' },
-    { label: 'API Protokol',              value: 'GraphQL',  icon: Key, delta: 'POST /graphql' },
+    { label: 'Mode Arsitektur',           value: systemStatus?.architecture || 'Modular Monolith', icon: Server, delta: systemStatus?.usersMode || 'In-Process (Port 8000)' },
     { label: 'Status Sesi',               value: 'Aktif',    icon: Activity, delta: 'Bearer JWT Token' },
   ];
 
@@ -372,8 +379,12 @@ export default function AdminDashboard({ initialTab = 'dashboard' }: AdminDashbo
                 {currentTab === 'settings' && '/admin/settings'}
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Protokol Aktif: GraphQL <code>/graphql</code> & gRPC <code>:8001</code>
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+              <span>Mode: <strong className="font-medium text-foreground">{systemStatus?.architecture || 'Modular Monolith'}</strong></span>
+              <span>•</span>
+              <span>Users: <code className="text-[11px] bg-muted px-1.5 py-0.5 rounded text-foreground">{systemStatus?.usersMode || 'In-Process (Modular Monolith)'}</code></span>
+              <span>•</span>
+              <span>Endpoint: <code className="text-foreground">{systemStatus?.graphqlEndpoint || '/graphql'}</code></span>
             </p>
           </div>
           <div className="ml-auto flex items-center gap-3">
@@ -452,7 +463,7 @@ export default function AdminDashboard({ initialTab = 'dashboard' }: AdminDashbo
                       Status Komponen Backend & Layanan
                     </CardTitle>
                     <CardDescription>
-                      Arsitektur Modular Monolith dengan gRPC Microservices
+                      {systemStatus?.message || 'Arsitektur Modular Monolith (In-Process) siap scale ke gRPC'}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -466,10 +477,14 @@ export default function AdminDashboard({ initialTab = 'dashboard' }: AdminDashbo
 
                     <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
                       <div>
-                        <div className="text-sm font-medium">Users Microservice (gRPC)</div>
-                        <div className="text-xs text-muted-foreground">Port 8001 (Tonic Protobuf Service)</div>
+                        <div className="text-sm font-medium">Komponen Modul Users</div>
+                        <div className="text-xs text-muted-foreground">
+                          {systemStatus?.usersMode || 'In-Process (Modular Monolith)'}
+                        </div>
                       </div>
-                      <Badge variant="default">Terhubung</Badge>
+                      <Badge variant={systemStatus?.usersMode?.includes('gRPC') ? 'default' : 'secondary'}>
+                        {systemStatus?.usersMode?.includes('gRPC') ? 'gRPC Microservice' : 'In-Process (Monolith)'}
+                      </Badge>
                     </div>
 
                     <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
