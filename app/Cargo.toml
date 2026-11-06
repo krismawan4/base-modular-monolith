@@ -23,6 +23,7 @@ sqlx               = { workspace = true }
 utoipa             = { workspace = true }
 utoipa-swagger-ui  = { workspace = true }
 async-graphql      = { workspace = true }
+dotenvy            = { workspace = true }
 
 [dev-dependencies]
 http-body-util = "0.1"

@@ -26,4 +26,5 @@ async-graphql = "7.2"
 tonic         = "0.12"
 prost         = "0.13"
 tonic-build   = "0.12"
+dotenvy       = "0.15"
 
