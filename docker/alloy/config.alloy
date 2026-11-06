@@ -1,0 +1,60 @@
+// Discover local Docker containers via the Docker socket
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "5s"
+}
+
+// Extract container metadata and format labels
+discovery.relabel "docker_logs" {
+  targets = discovery.docker.containers.targets
+
+  // Extract container name and remove the leading slash '/'
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container_name"
+  }
+
+  // Extract compose service name if present
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+
+  // Extract container image
+  rule {
+    source_labels = ["__meta_docker_container_image"]
+    target_label  = "image"
+  }
+
+  // Set standard job label
+  rule {
+    target_label = "job"
+    replacement  = "docker_containers"
+  }
+}
+
+// Collect logs from discovered containers
+loki.source.docker "default" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.docker_logs.output
+  forward_to = [loki.process.filter_logs.receiver]
+}
+
+// Optional filtering: drop Alloy's self-generated logs to avoid noisy feedback loops
+loki.process "filter_logs" {
+  forward_to = [loki.write.loki_endpoint.receiver]
+
+  stage.drop {
+    source     = "container_name"
+    expression = "modular_alloy"
+  }
+}
+
+// Push collected logs to Loki
+loki.write "loki_endpoint" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+

@@ -95,6 +95,12 @@ docker/postgreSQL/*
 !docker/postgreSQL/.gitkeep
 docker/redis/*
 !docker/redis/.gitkeep
+docker/loki/data/*
+!docker/loki/data/.gitkeep
+docker/alloy/data/*
+!docker/alloy/data/.gitkeep
+docker/grafana/data/*
+!docker/grafana/data/.gitkeep
 *.rdb
 
 # =============================================================================

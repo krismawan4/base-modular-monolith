@@ -17,7 +17,7 @@ serde              = { workspace = true }
 serde_json         = { workspace = true }
 uuid               = { workspace = true }
 tracing            = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 sqlx               = { workspace = true }
 async-graphql      = { workspace = true }
 dotenvy            = { workspace = true }

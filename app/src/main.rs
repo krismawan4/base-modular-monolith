@@ -62,11 +62,21 @@ pub fn create_app(
 async fn main() {
     dotenvy::dotenv().ok();
 
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
-        )
-        .init();
+    let log_format = std::env::var("LOG_FORMAT").unwrap_or_else(|_| "text".to_string());
+    if log_format.eq_ignore_ascii_case("json") {
+        tracing_subscriber::fmt()
+            .json()
+            .with_env_filter(
+                std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
+            )
+            .init();
+    } else {
+        tracing_subscriber::fmt()
+            .with_env_filter(
+                std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
+            )
+            .init();
+    }
 
     let database_url = std::env::var("DATABASE_URL")
         .expect("DATABASE_URL wajib disetel di dalam file .env");

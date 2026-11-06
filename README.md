@@ -227,3 +227,58 @@ Jika ingin performa maksimal (*bare-metal / near-zero overhead*):
    }
    ```
 
+
+
+---
+
+## 📊 Centralized Logging (Grafana Alloy + Loki + Grafana)
+
+Proyek ini dilengkapi stack pemantauan log terpusat modern:
+
+```text
+[ Docker Containers ]
+  ├── modular_backend (Axum JSON / Text Logs)
+  ├── modular_postgres
+  ├── modular_redis
+  └── modular_frontend
+             │
+             ▼ (Docker Socket Scraper)
+     [ Grafana Alloy ]  (:12345)
+             │
+             ▼ (HTTP Push)
+     [ Grafana Loki ]   (:3100)
+             │
+             ▼ (Loki Datasource)
+     [ Grafana UI ]     (:3000)
+```
+
+### 1. Menjalankan Stack Logging
+```bash
+# Jalankan seluruh service beserta Loki, Alloy, dan Grafana:
+docker compose up -d
+
+# Atau jika hanya ingin menjalankan stack logging:
+docker compose up -d loki alloy grafana
+```
+
+### 2. Mengakses Grafana Dashboard
+- **URL**: [http://localhost:3000](http://localhost:3000)
+- **Username**: `admin`
+- **Password**: `admin`
+
+Datasource **Loki** dan Dashboard **"Centralized Container Logs"** telah di-provisioning otomatis:
+1. Buka menu **Dashboards** > folder **Logging** > buka dashboard **Centralized Container Logs**.
+2. Anda dapat memfilter logs per-kontainer (`modular_backend`, `modular_postgres`, dsb.) dan melihat stream log secara real-time.
+3. Atau buka menu **Explore** dan masukkan LogQL:
+   ```logql
+   {container_name="modular_backend"}
+   ```
+   Untuk query log dengan format JSON:
+   ```logql
+   {container_name="modular_backend"} | json
+   ```
+
+### 3. Format Log Backend (`LOG_FORMAT`)
+Backend Axum mendukung 2 mode logging via environment variable:
+- `LOG_FORMAT=text`: Format standar human-readable (cocok untuk local development di terminal).
+- `LOG_FORMAT=json`: Format JSON terstruktur (aktif secara default di Docker untuk parsing otomatis di Loki).
