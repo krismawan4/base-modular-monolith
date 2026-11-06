@@ -10,7 +10,6 @@ tokio              = { workspace = true }
 axum               = { workspace = true }
 tower              = { version = "0.5", features = ["util"] }
 tower-http         = { version = "0.6", features = ["cors", "trace"] }
-tower-cookies      = { workspace = true }
 jsonwebtoken       = { workspace = true }
 bcrypt             = { workspace = true }
 chrono             = { workspace = true }
@@ -20,8 +19,6 @@ uuid               = { workspace = true }
 tracing            = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 sqlx               = { workspace = true }
-utoipa             = { workspace = true }
-utoipa-swagger-ui  = { workspace = true }
 async-graphql      = { workspace = true }
 dotenvy            = { workspace = true }
 

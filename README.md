@@ -2,6 +2,9 @@
 
 Arsitektur aplikasi backend modern berbasis **Rust** yang mengkombinasikan kecepatan dan kesederhanaan **Modular Monolith** dengan fleksibilitas transisi ke **Microservices (via gRPC & Tonic)**.
 
+> [!NOTE]
+> **Branch `main`** kini berfokus pada **GraphQL API** (menggunakan [Async-GraphQL](https://async-graphql.github.io/)) untuk komunikasi client-to-server dan **gRPC** untuk komunikasi antar-layanan (East-West traffic). Implementasi REST API terdahulu beserta Swagger UI diarsipkan dan tersimpan rapi di branch terpisah: [`archive/rest-api`](https://github.com/krismawan4/base-modular-monolith/tree/archive/rest-api).
+
 ---
 
 ## 📂 Struktur Proyek
@@ -129,15 +132,14 @@ Setelah Aggregator berjalan di port 8000:
 | Layanan | URL | Keterangan |
 | :--- | :--- | :--- |
 | **Frontend Web App** | [http://127.0.0.1:5173/](http://127.0.0.1:5173/) | Dashboard Admin & Login GraphQL |
-| **REST API Swagger UI** | [http://127.0.0.1:8000/swagger-ui/](http://127.0.0.1:8000/swagger-ui/) | Dokumentasi OpenAPI & Interactive REST tester |
-| **GraphQL Playground** | [http://127.0.0.1:8000/graphql](http://127.0.0.1:8000/graphql) | IDE GraphQL untuk query & mutation user |
-| **OpenAPI Spec (JSON)** | [http://127.0.0.1:8000/api-docs/openapi.json](http://127.0.0.1:8000/api-docs/openapi.json) | File OpenAPI raw schema |
+| **GraphQL Playground** | [http://127.0.0.1:8000/graphql](http://127.0.0.1:8000/graphql) | IDE GraphQL interaktif untuk query & mutation |
+| **Root Health/Status** | [http://127.0.0.1:8000/](http://127.0.0.1:8000/) | Status service & versi aplikasi |
 
 ---
 
 ## 🧪 Menjalankan Automated Tests
 
-Seluruh pengujian unit dan integrasi (termasuk gRPC & REST tests) dapat dijalankan dengan:
+Seluruh pengujian unit dan integrasi (termasuk gRPC & GraphQL tests) dapat dijalankan dengan:
 
 ```bash
 # Menjalankan seluruh test di semua crate/modul
@@ -149,7 +151,7 @@ cargo test -p users
 # Menjalankan test modul auth saja
 cargo test -p auth
 
-# Menjalankan test integrasi app (Swagger & GraphQL)
+# Menjalankan test integrasi app (GraphQL & Service Health)
 cargo test -p app
 ```
 

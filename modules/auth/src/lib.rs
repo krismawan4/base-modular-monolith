@@ -14,13 +14,13 @@ use serde::{Deserialize, Serialize};
 
 /// Data Transfer Object untuk Permission.
 /// Merepresentasikan satu hak akses yang bersifat read-only bagi konsumen.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PermissionDto {
     pub name: String,
 }
 
 /// Data Transfer Object untuk Role.
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoleDto {
     pub name:        String,
     pub permissions: Vec<PermissionDto>,
@@ -28,7 +28,7 @@ pub struct RoleDto {
 
 /// Data Transfer Object untuk User.
 /// Satu-satunya representasi User yang boleh beredar di luar crate `auth`.
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserDto {
     pub id:    String,
     pub name:  String,
@@ -133,15 +133,13 @@ pub fn build_in_memory_blacklist() -> DynTokenBlacklist {
 }
 
 // ---------------------------------------------------------------------------
-// HTTP Router, Middleware & Blacklist (publik agar bisa digunakan di app)
+// Middleware & Blacklist (publik agar bisa digunakan di app)
 // ---------------------------------------------------------------------------
 
 pub mod blacklist;
-pub mod http;
 pub mod middleware;
 
 pub use blacklist::{DynTokenBlacklist, TokenBlacklist};
-pub use http::{auth_routes, AuthApiDoc, AuthState};
 pub use middleware::{create_jwt, decode_jwt, AuthSource, AuthUser};
 
 // ---------------------------------------------------------------------------

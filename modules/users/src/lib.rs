@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 // Public DTOs
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserDto {
     pub id:         String,
     pub name:       String,
@@ -109,13 +109,6 @@ pub async fn run_grpc_server(
 
     Ok(())
 }
-
-// ---------------------------------------------------------------------------
-// HTTP Router
-// ---------------------------------------------------------------------------
-
-pub mod http;
-pub use http::{users_routes, UsersApiDoc};
 
 // ---------------------------------------------------------------------------
 // Internal Details
