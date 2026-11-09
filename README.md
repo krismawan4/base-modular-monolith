@@ -214,6 +214,38 @@ cargo test -p app
 
 ---
 
+## 🧹 Maintenance & Pembersihan Disk
+
+### 1. Membersihkan Folder `target/` Rust (`cargo clean`)
+Selama proses development dan kompilasi berulang kali, ukuran folder `target/` dapat membengkak hingga puluhan gigabyte:
+
+* **Reset Total (Menghapus seluruh isi folder `target/` ke 0 byte):**
+  ```bash
+  cargo clean
+  ```
+* **Hanya Menghapus Build Release:**
+  ```bash
+  cargo clean --release
+  ```
+* **Hanya Menghapus Build Crate Tertentu:**
+  ```bash
+  cargo clean -p app
+  cargo clean -p users
+  ```
+* **Pembersihan Cerdas via `cargo-sweep` (Hanya Hapus Cache Usang):**
+  Jika ingin menghemat ruang disk tanpa memperlambat kompilasi harian:
+  ```bash
+  cargo install cargo-sweep
+  cargo sweep --time 14      # Hapus artefak yang tidak disentuh > 14 hari
+  cargo sweep --installed    # Hapus file compiler versi lama
+  ```
+* **Manual via Terminal (PowerShell):**
+  ```powershell
+  Remove-Item -Recurse -Force target
+  ```
+
+---
+
 ## 🚀 Panduan Deployment ke Production
 
 ### 1. Menggunakan Docker Compose (Direkomendasikan)
@@ -231,7 +263,34 @@ docker compose up -d --build
 docker compose logs -f backend
 ```
 
-### 2. Menggunakan Binary Linux Native (Systemd di VPS)
+### 2. Pembersihan Docker (Prune Images & Build Cache)
+Jika disk penuh atau ingin membersihkan cache kompilasi Docker dan image usang:
+
+```bash
+# Menghapus build cache BuildKit saja (sangat menghemat ruang disk):
+docker builder prune -a -f
+
+# Menghapus seluruh image yang sedang tidak dipakai:
+docker image prune -a -f
+
+# Pembersihan menyeluruh (Image + Cache + Container mati):
+docker system prune -a -f
+```
+
+> [!WARNING]
+> **Hati-hati dengan flag `--volumes`:**  
+> Jika menjalankan `docker system prune -a --volumes -f`, volume data PostgreSQL dan Redis yang sedang tidak berjalan juga akan ikut terhapus. Gunakan `docker system prune -a -f` (tanpa `--volumes`) agar volume data database tetap aman.
+
+| Kebutuhan | Perintah |
+| :--- | :--- |
+| **Hapus Build Cache Saja** | `docker builder prune -a -f` |
+| **Hapus Semua Unused Images** | `docker image prune -a -f` |
+| **Pembersihan Bersih (Aman Volume Data)** | `docker system prune -a -f` |
+| **Pembersihan Total (+ Volume Data)** | `docker system prune -a --volumes -f` |
+
+---
+
+### 3. Menggunakan Binary Linux Native (Systemd di VPS)
 Jika ingin performa maksimal (*bare-metal / near-zero overhead*):
 
 1. **Compile binary Release:**
