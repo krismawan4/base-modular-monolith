@@ -10,6 +10,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+# Konfigurasi toleransi jaringan Cargo
+ENV CARGO_NET_RETRY=10
+ENV CARGO_HTTP_TIMEOUT=120
+ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
+
 # Copy manifest dan proto
 COPY Cargo.toml Cargo.lock ./
 COPY app/Cargo.toml           app/Cargo.toml
@@ -21,8 +26,13 @@ COPY proto/                   proto/
 COPY app/     app/
 COPY modules/ modules/
 
-# Compile seluruh binary release (app dan users_service)
-RUN cargo build --release --bins
+# Compile seluruh binary release dengan cache mount BuildKit
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/app/target \
+    cargo build --release --bins && \
+    cp /app/target/release/app /app/app_bin && \
+    cp /app/target/release/users_service /app/users_service_bin
 
 # ─────────────────────────────────────────────────────────────
 # Stage 2: Runtime — image minimal
@@ -39,8 +49,8 @@ USER appuser
 
 WORKDIR /app
 
-COPY --from=builder /app/target/release/app ./app
-COPY --from=builder /app/target/release/users_service ./users_service
+COPY --from=builder /app/app_bin ./app
+COPY --from=builder /app/users_service_bin ./users_service
 
 ENV RUST_LOG=info
 EXPOSE 8000 8001

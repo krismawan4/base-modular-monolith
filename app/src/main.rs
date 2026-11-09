@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use sqlx::postgres::PgPoolOptions;
 use tower_http::cors::CorsLayer;
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
-use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer};
+use tower_http::trace::{DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
 mod graphql;
@@ -54,11 +54,19 @@ pub fn create_app(
 
     let x_request_id = axum::http::HeaderName::from_static("x-request-id");
     let trace_layer = TraceLayer::new_for_http()
-        .make_span_with(
-            DefaultMakeSpan::new()
-                .level(Level::INFO)
-                .include_headers(true),
-        )
+        .make_span_with(|request: &axum::http::Request<_>| {
+            let request_id = request
+                .headers()
+                .get("x-request-id")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("unknown");
+            tracing::info_span!(
+                "request",
+                method = %request.method(),
+                uri = %request.uri(),
+                request_id = %request_id,
+            )
+        })
         .on_request(DefaultOnRequest::new().level(Level::INFO))
         .on_response(
             DefaultOnResponse::new()
@@ -84,6 +92,7 @@ async fn main() {
     if log_format.eq_ignore_ascii_case("json") {
         tracing_subscriber::fmt()
             .json()
+            .with_span_list(false)
             .with_env_filter(
                 std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
             )
