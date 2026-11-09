@@ -155,10 +155,14 @@ export async function graphqlRequest<T = any>(
     headers['Authorization'] = `Bearer ${authToken}`;
   }
 
+  // Ekstrak nama operasi (misal: "query GetUsers" -> "GetUsers") untuk observability & logging backend
+  const match = query.match(/(?:query|mutation|subscription)\s+(\w+)/);
+  const operationName = match ? match[1] : undefined;
+
   const res = await fetch(GRAPHQL_ENDPOINT, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ query, variables }),
+    body: JSON.stringify({ query, variables, operationName }),
   });
 
   const json = await res.json();

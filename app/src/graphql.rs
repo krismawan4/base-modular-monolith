@@ -282,13 +282,66 @@ pub async fn graphql_playground() -> impl IntoResponse {
     )
 }
 
+fn extract_operation_summary(query: &str, operation_name: Option<&str>) -> String {
+    if let Some(name) = operation_name {
+        if !name.trim().is_empty() {
+            return name.trim().to_string();
+        }
+    }
+
+    let cleaned = query
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let cleaned = cleaned.trim();
+
+    if cleaned.starts_with("query ") || cleaned.starts_with("mutation ") || cleaned.starts_with("subscription ") {
+        let parts: Vec<&str> = cleaned.split_whitespace().collect();
+        if parts.len() >= 2 {
+            let name = parts[1].trim_matches(|c| c == '{' || c == '(');
+            if !name.is_empty() {
+                return format!("{}: {}", parts[0], name);
+            }
+        }
+    }
+
+    if let Some(inner) = cleaned.strip_prefix('{') {
+        let first_word = inner.trim().split_whitespace().next().unwrap_or("unknown");
+        let first_field = first_word.trim_matches(|c| c == '{' || c == '(');
+        if !first_field.is_empty() {
+            return format!("query: {}", first_field);
+        }
+    }
+
+    "anonymous".to_string()
+}
+
 pub async fn graphql_handler(
     Extension(schema): Extension<Arc<AppSchema>>,
     headers: HeaderMap,
     Json(mut req): Json<async_graphql::Request>,
 ) -> Json<async_graphql::Response> {
-    let operation = req.operation_name.clone().unwrap_or_else(|| "anonymous".to_string());
-    tracing::info!(operation = %operation, "Menjalankan GraphQL operation");
+    let operation = extract_operation_summary(&req.query, req.operation_name.as_deref());
+    let query_snippet = req
+        .query
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let query_preview = if query_snippet.len() > 60 {
+        format!("{}...", &query_snippet[..60])
+    } else {
+        query_snippet
+    };
+
+    tracing::info!(
+        operation = %operation,
+        query = %query_preview,
+        "Memproses GraphQL {}", operation
+    );
 
     if let Some(auth_val) = headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()) {
         if let Some(token) = auth_val.strip_prefix("Bearer ") {
@@ -299,10 +352,10 @@ pub async fn graphql_handler(
     let response = schema.execute(req).await;
     if !response.errors.is_empty() {
         for err in &response.errors {
-            tracing::warn!(operation = %operation, error = %err.message, "GraphQL operation menghasilkan error");
+            tracing::warn!(operation = %operation, error = %err.message, "GraphQL {} gagal", operation);
         }
     } else {
-        tracing::info!(operation = %operation, "GraphQL operation selesai dengan sukses");
+        tracing::info!(operation = %operation, "GraphQL {} selesai dengan sukses", operation);
     }
 
     Json(response)
