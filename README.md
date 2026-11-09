@@ -76,9 +76,59 @@ USERS_GRPC_PORT=8001
 
 ## 🚀 Cara Menjalankan Aplikasi
 
-Aplikasi ini dapat dijalankan dalam **2 mode arsitektur**:
+### 💻 Mode Development Lokal (`cargo run` & `npm run dev`)
 
-### Mode 1: Full Modular Monolith (1 Proses)
+Jika Anda sedang mendevelop kode secara lokal dan ingin fitur *Hot Module Replacement* (HMR) frontend serta kompilasi cepat Rust:
+
+#### 1. Aktifkan Container Docker Pendukung (Database & Cache)
+Hanya aktifkan container **infrastruktur** agar data tersimpan persisten:
+```bash
+docker compose up -d postgres redis
+```
+
+> [!WARNING]
+> **JANGAN** menyalakan container `backend` dan `frontend` di Docker saat mode lokal, agar tidak terjadi bentrok port (*port conflict*) dengan `cargo run` (:8000) dan dev server frontend (:4321 / :5173).
+
+*(Opsional: Jika ingin melihat visualisasi log realtime di Grafana, jalankan: `docker compose up -d postgres redis loki alloy grafana`)*.
+
+#### 2. Jalankan Backend (Rust Axum)
+```bash
+cargo run -p app
+```
+*Backend otomatis mengompilasi kode dan berjalan di `http://127.0.0.1:8000`.*
+
+#### 3. Jalankan Frontend (Astro & React)
+```bash
+npm --prefix frontend run dev
+```
+*Frontend berjalan dengan fitur instant HMR tanpa perlu menjalankan `npm run build` setiap ada perubahan kode.*
+
+---
+
+### 📋 Standarisasi `getData` (Top 1000 & Client-Side Processing)
+
+Untuk menghindari lambatnya paginasi konvensional di database (*OFFSET scanning & COUNT(*) overhead*), proyek ini menerapkan standarisasi `getData`:
+
+1. **Backend (Database):**
+   - Query distandarkan selalu mengambil data terbaru:
+     ```sql
+     SELECT ... FROM users ORDER BY created_at DESC LIMIT 1000
+     ```
+   - Sangat cepat dan efisien karena memanfaatkan *Index Scan* pada kolom `created_at`.
+
+2. **Frontend (In-Memory Processing via `useDataTable`):**
+   - **Pencarian Global:** Filter teks yang otomatis mencari ke semua kolom.
+   - **Pencarian Spesifik Kolom:** Filter independen per kolom (Nama, Email, Role, ID).
+   - **Sorting Tiap Kolom:** Pengurutan instan (ASC / DESC / Reset) untuk String, Date, maupun Angka.
+   - **Paginasi Fleksibel:** Pengguna dapat memilih `10`, `15`, `30`, `50`, atau `100` data per halaman dengan navigasi halaman cerdas (*smart pagination controls*).
+
+---
+
+### Mode Arsitektur Backend
+
+Backend dapat dijalankan dalam **2 pilihan arsitektur**:
+
+#### Mode 1: Full Modular Monolith (1 Proses)
 
 Dalam mode ini, seluruh modul (`auth` dan `users`) berjalan dalam satu proses memori yang sama.
 
@@ -94,7 +144,7 @@ Dalam mode ini, seluruh modul (`auth` dan `users`) berjalan dalam satu proses me
 
 ---
 
-### Mode 2: Microservice Architecture (Dual Process via gRPC)
+#### Mode 2: Microservice Architecture (Dual Process via gRPC)
 
 Dalam mode ini, modul `users` dijalankan sebagai **Microservice terpisah** di port `8001` dengan protokol gRPC, dan Aggregator memanggilnya lewat jaringan HTTP/2 gRPC.
 
