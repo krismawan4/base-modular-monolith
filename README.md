@@ -92,10 +92,17 @@ docker compose up -d postgres redis
 *(Opsional: Jika ingin melihat visualisasi log realtime di Grafana, jalankan: `docker compose up -d postgres redis loki alloy grafana`)*.
 
 #### 2. Jalankan Backend (Rust Axum)
+Cukup jalankan:
 ```bash
-cargo run -p app
+cargo run
 ```
 *Backend otomatis mengompilasi kode dan berjalan di `http://127.0.0.1:8000`.*
+
+> [!TIP]
+> Proyek ini memiliki 2 binary (`app` dan `users_service`). Berkat konfigurasi `default-members = ["app"]` di root `Cargo.toml`, Anda cukup mengetik `cargo run`.
+> Jika ingin menjalankan binary secara spesifik:
+> - **Aggregator Utama (Port 8000):** `cargo run` (atau `cargo run -p app` / `cargo run --bin app`)
+> - **Users Microservice gRPC (Port 8001):** `cargo run --bin users_service`
 
 #### 3. Jalankan Frontend (Astro & React)
 ```bash

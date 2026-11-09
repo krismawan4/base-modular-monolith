@@ -4,6 +4,7 @@ members = [
     "modules/auth",
     "modules/users",
 ]
+default-members = ["app"]
 resolver = "2"
 
 [workspace.dependencies]
