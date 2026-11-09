@@ -355,7 +355,19 @@ pub async fn graphql_handler(
             tracing::warn!(operation = %operation, error = %err.message, "GraphQL {} gagal", operation);
         }
     } else {
-        tracing::info!(operation = %operation, "GraphQL {} selesai dengan sukses", operation);
+        let resp_str = response.data.to_string();
+        let resp_preview = if resp_str.len() > 150 {
+            format!("{}...", &resp_str[..150])
+        } else {
+            resp_str
+        };
+
+        tracing::info!(
+            operation = %operation,
+            response = %resp_preview,
+            "GraphQL {} selesai dengan sukses",
+            operation
+        );
     }
 
     Json(response)
