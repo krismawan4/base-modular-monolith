@@ -20,6 +20,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1024M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
 
   # ── Redis Cache / Token Blacklist ───────────────────────────
   redis:
@@ -37,6 +45,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+        reservations:
+          cpus: "0.10"
+          memory: 128M
 
   # ── Rust Backend (Axum) ──────────────────────────────────────
   backend:
@@ -70,6 +86,14 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.50"
+          memory: 1024M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
 
   # ── Users Microservice (Opsional — Aktifkan jika split microservice) ───
   # users_service:
@@ -90,6 +114,14 @@ services:
   #       condition: service_healthy
   #   networks:
   #     - app_network
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: "1.00"
+  #         memory: 512M
+  #       reservations:
+  #         cpus: "0.20"
+  #         memory: 128M
 
 
   # ── Frontend (Astro → Nginx) ─────────────────────────────────
@@ -107,6 +139,14 @@ services:
       - backend
     networks:
       - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+        reservations:
+          cpus: "0.10"
+          memory: 64M
 
   # ── Grafana Loki (Log Aggregation Engine) ────────────────────
   loki:
@@ -126,6 +166,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 1024M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
 
   # ── Grafana Alloy (Collector & Scraper) ──────────────────────
   alloy:
@@ -149,6 +197,14 @@ services:
         condition: service_healthy
     networks:
       - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+        reservations:
+          cpus: "0.10"
+          memory: 128M
 
   # ── Grafana (Visualization & Dashboards) ─────────────────────
   grafana:
@@ -168,6 +224,14 @@ services:
       - loki
     networks:
       - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+        reservations:
+          cpus: "0.10"
+          memory: 128M
 
 networks:
   app_network:
