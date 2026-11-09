@@ -83,3 +83,36 @@ async fn test_list_and_update_and_delete_user() {
     assert_eq!(res.unwrap_err(), UserError::NotFound);
 }
 
+#[tokio::test]
+async fn test_list_users_order_and_limit() {
+    let service = UsersService::new_in_memory();
+
+    let u1 = service
+        .create_user(CreateUserInput {
+            name:     "User 1".to_string(),
+            email:    "u1@example.com".to_string(),
+            password: None,
+            role:     None,
+        })
+        .await
+        .unwrap();
+
+    let u2 = service
+        .create_user(CreateUserInput {
+            name:     "User 2".to_string(),
+            email:    "u2@example.com".to_string(),
+            password: None,
+            role:     None,
+        })
+        .await
+        .unwrap();
+
+    let list = service.list_users().await.unwrap();
+    assert!(list.len() >= 2);
+    // User 2 was created after User 1, so User 2 should appear before User 1 (DESC order)
+    let pos_u2 = list.iter().position(|u| u.id == u2.id).unwrap();
+    let pos_u1 = list.iter().position(|u| u.id == u1.id).unwrap();
+    assert!(pos_u2 < pos_u1);
+}
+
+

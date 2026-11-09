@@ -205,7 +205,7 @@ impl UsersRepository {
         match self {
             Self::Postgres(pool) => {
                 let rows = sqlx::query(
-                    "SELECT id, name, email, password_hash, role_name, token, created_at FROM users ORDER BY created_at ASC",
+                    "SELECT id, name, email, password_hash, role_name, token, created_at FROM users ORDER BY created_at DESC LIMIT 1000",
                 )
                 .fetch_all(pool)
                 .await
@@ -229,7 +229,8 @@ impl UsersRepository {
             Self::InMemory(store) => {
                 let guard = store.read().unwrap();
                 let mut list: Vec<User> = guard.users.values().cloned().collect();
-                list.sort_by_key(|u| u.created_at);
+                list.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+                list.truncate(1000);
                 Ok(list)
             }
         }

@@ -6,6 +6,7 @@ import {
   LayoutDashboard, Settings, LogOut, Menu, X, Loader2,
   Plus, Pencil, Trash2, Search, RefreshCw, AlertCircle, CheckCircle2,
   ExternalLink, ArrowRight, UserPlus,
+  ArrowUpDown, ArrowUp, ArrowDown, Filter, RotateCcw, Calendar,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +14,8 @@ import { Button } from '@/components/ui/button';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import { useDataTable, type PageSizeOption } from '@/lib/useDataTable';
+import { DataTablePagination } from '@/components/ui/DataTablePagination';
 import {
   getAuthToken, getAuthUser, clearAuthSession, graphqlRequest,
   type GqlUser, type GqlUsersResponse, type GqlMeResponse,
@@ -41,8 +44,8 @@ export default function AdminDashboard({ initialTab = 'dashboard' }: AdminDashbo
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Search & Filter (Users Tab)
-  const [searchQuery, setSearchQuery] = useState('');
+  // Column Filters toggle
+  const [showColumnFilters, setShowColumnFilters] = useState(false);
 
   // Notification state
   const [notification, setNotification] = useState<{
@@ -251,18 +254,38 @@ export default function AdminDashboard({ initialTab = 'dashboard' }: AdminDashbo
     }
   };
 
-  // Filtered users for Users Table
-  const filteredUsers = useMemo(() => {
-    if (!searchQuery.trim()) return usersList;
-    const query = searchQuery.toLowerCase();
-    return usersList.filter(
-      u =>
-        u.name.toLowerCase().includes(query) ||
-        u.email.toLowerCase().includes(query) ||
-        u.role.toLowerCase().includes(query) ||
-        u.id.toLowerCase().includes(query)
-    );
-  }, [usersList, searchQuery]);
+  // Standardized Data Table Hook (Top 1000, Sorting tiap kolom, Search global, Search spesifik kolom, Paginasi)
+  const {
+    paginatedData: paginatedUsers,
+    totalRaw,
+    totalFiltered,
+    currentPage,
+    pageSize,
+    totalPages,
+    pageSizeOptions,
+    startItem,
+    endItem,
+    pageNumbers,
+    setPage,
+    setPageSize,
+    nextPage,
+    prevPage,
+    canNextPage,
+    canPrevPage,
+    globalSearch,
+    setGlobalSearch,
+    columnFilters,
+    setColumnFilter,
+    clearColumnFilters,
+    hasActiveFilters,
+    sortConfig,
+    toggleSort,
+    resetAll: resetTable,
+  } = useDataTable<GqlUser>(usersList, {
+    initialPageSize: 10,
+    searchableColumns: ['name', 'email', 'role', 'id'],
+    defaultSort: { key: 'createdAt', direction: 'desc' },
+  });
 
   // Top recent 5 users for Dashboard
   const recentUsers = useMemo(() => {
@@ -270,11 +293,21 @@ export default function AdminDashboard({ initialTab = 'dashboard' }: AdminDashbo
   }, [usersList]);
 
   const stats = [
-    { label: 'Total User (Live GraphQL)', value: String(usersList.length), icon: Users, delta: 'Data real-time backend' },
+    { label: 'Total User (Top 1000)',     value: String(usersList.length), icon: Users, delta: 'Maks. 1000 data terbaru' },
     { label: 'User Role',                 value: currentUser?.role || 'Admin', icon: ShieldCheck, delta: 'Role terautentikasi' },
     { label: 'Mode Arsitektur',           value: systemStatus?.architecture || 'Modular Monolith', icon: Server, delta: systemStatus?.usersMode || 'In-Process (Port 8000)' },
     { label: 'Status Sesi',               value: 'Aktif',    icon: Activity, delta: 'Bearer JWT Token' },
   ];
+
+  const renderSortIcon = (key: keyof GqlUser) => {
+    if (sortConfig.key !== key || !sortConfig.direction) {
+      return <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/50 transition-colors" />;
+    }
+    if (sortConfig.direction === 'asc') {
+      return <ArrowUp className="h-3.5 w-3.5 text-primary font-bold" />;
+    }
+    return <ArrowDown className="h-3.5 w-3.5 text-primary font-bold" />;
+  };
 
   return (
     <div className="flex h-screen bg-muted/30">
@@ -652,9 +685,14 @@ export default function AdminDashboard({ initialTab = 'dashboard' }: AdminDashbo
             <Card>
               <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                  <CardTitle>Manajemen Pengguna (CRUD Users)</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <CardTitle>Manajemen Pengguna (CRUD Users)</CardTitle>
+                    <Badge variant="secondary" className="text-[11px] font-mono">
+                      Top 1000 Terbaru
+                    </Badge>
+                  </div>
                   <CardDescription>
-                    Kelola data pengguna secara langsung melalui mutasi & query GraphQL
+                    Standarisasi getData: Menampilkan Top 1000 data terbaru (ORDER BY created_at DESC) dengan pencarian global & spesifik kolom, sorting tiap kolom, dan paginasi client-side.
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
@@ -664,6 +702,7 @@ export default function AdminDashboard({ initialTab = 'dashboard' }: AdminDashbo
                     onClick={fetchUsers}
                     disabled={refreshing}
                     className="gap-1.5"
+                    title="Muat ulang data terbaru dari backend"
                   >
                     <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
                     <span className="hidden sm:inline">Refresh</span>
@@ -679,55 +718,255 @@ export default function AdminDashboard({ initialTab = 'dashboard' }: AdminDashbo
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Search Bar */}
-                <div className="flex items-center gap-2 max-w-sm">
-                  <div className="relative w-full">
-                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <input
-                      type="text"
-                      placeholder="Cari berdasarkan nama, email, role..."
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      className="flex h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    />
+                {/* ── Toolbar: Global Search + Filter Actions ── */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 flex-1 max-w-md">
+                    {/* Global Search Bar */}
+                    <div className="relative w-full">
+                      <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <input
+                        type="text"
+                        placeholder="Cari global (nama, email, role, ID)..."
+                        value={globalSearch}
+                        onChange={e => setGlobalSearch(e.target.value)}
+                        className="flex h-9 w-full rounded-md border border-input bg-background pl-9 pr-8 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      />
+                      {globalSearch && (
+                        <button
+                          onClick={() => setGlobalSearch('')}
+                          className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                          title="Hapus pencarian global"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {/* Toggle Specific Column Search */}
+                    <Button
+                      variant={showColumnFilters ? 'secondary' : 'outline'}
+                      size="sm"
+                      onClick={() => setShowColumnFilters(v => !v)}
+                      className="gap-1.5 text-xs h-9"
+                    >
+                      <Filter className="h-3.5 w-3.5" />
+                      <span>Filter Spesifik Kolom</span>
+                      {Object.keys(columnFilters).length > 0 && (
+                        <span className="ml-1 rounded-full bg-primary text-primary-foreground px-1.5 py-0.2 text-[10px] font-bold">
+                          {Object.keys(columnFilters).length}
+                        </span>
+                      )}
+                    </Button>
+
+                    {/* Reset All Filters */}
+                    {hasActiveFilters && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={resetTable}
+                        className="gap-1.5 text-xs h-9 text-muted-foreground hover:text-foreground"
+                        title="Reset semua filter dan pencarian"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Reset Filter</span>
+                      </Button>
+                    )}
                   </div>
                 </div>
 
-                {/* Table */}
+                {/* ── Box Filter Spesifik Per Kolom (Collapsible) ── */}
+                {showColumnFilters && (
+                  <div className="p-3.5 rounded-lg border bg-muted/20 space-y-2 animate-in fade-in-50 duration-200">
+                    <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground mb-1">
+                      <span>Pencarian Spesifik Kolom (Column-Specific Filters)</span>
+                      {Object.keys(columnFilters).length > 0 && (
+                        <button
+                          onClick={clearColumnFilters}
+                          className="text-[11px] text-primary hover:underline"
+                        >
+                          Bersihkan Kolom
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+                      {/* Search Nama */}
+                      <div>
+                        <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
+                          Cari Nama
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Filter nama..."
+                          value={columnFilters.name || ''}
+                          onChange={e => setColumnFilter('name', e.target.value)}
+                          className="h-8 w-full rounded-md border border-input bg-background px-2.5 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        />
+                      </div>
+
+                      {/* Search Email */}
+                      <div>
+                        <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
+                          Cari Email
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Filter email..."
+                          value={columnFilters.email || ''}
+                          onChange={e => setColumnFilter('email', e.target.value)}
+                          className="h-8 w-full rounded-md border border-input bg-background px-2.5 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        />
+                      </div>
+
+                      {/* Filter Role */}
+                      <div>
+                        <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
+                          Filter Role
+                        </label>
+                        <select
+                          value={columnFilters.role || ''}
+                          onChange={e => setColumnFilter('role', e.target.value)}
+                          className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
+                        >
+                          <option value="">Semua Role</option>
+                          <option value="admin">Admin</option>
+                          <option value="member">Member</option>
+                        </select>
+                      </div>
+
+                      {/* Search ID */}
+                      <div>
+                        <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
+                          Cari User ID
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Filter UUID..."
+                          value={columnFilters.id || ''}
+                          onChange={e => setColumnFilter('id', e.target.value)}
+                          className="h-8 w-full rounded-md border border-input bg-background px-2.5 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Table & Loading States ── */}
                 {loading ? (
                   <div className="flex items-center justify-center py-12 text-muted-foreground">
                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                     Mengambil data pengguna dari GraphQL...
                   </div>
                 ) : (
-                  <div className="rounded-md border">
+                  <div className="rounded-md border overflow-hidden">
                     <Table>
                       <TableHeader>
-                        <TableRow>
-                          <TableHead>Nama</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Role</TableHead>
-                          <TableHead className="hidden md:table-cell">ID</TableHead>
-                          <TableHead className="text-right">Aksi</TableHead>
+                        <TableRow className="bg-muted/40 hover:bg-muted/40">
+                          {/* Kolom Nama */}
+                          <TableHead>
+                            <button
+                              onClick={() => toggleSort('name')}
+                              className="group flex items-center gap-1.5 font-semibold text-foreground hover:text-primary transition-colors cursor-pointer select-none"
+                              title="Urutkan berdasarkan Nama"
+                            >
+                              <span>Nama</span>
+                              {renderSortIcon('name')}
+                            </button>
+                          </TableHead>
+
+                          {/* Kolom Email */}
+                          <TableHead>
+                            <button
+                              onClick={() => toggleSort('email')}
+                              className="group flex items-center gap-1.5 font-semibold text-foreground hover:text-primary transition-colors cursor-pointer select-none"
+                              title="Urutkan berdasarkan Email"
+                            >
+                              <span>Email</span>
+                              {renderSortIcon('email')}
+                            </button>
+                          </TableHead>
+
+                          {/* Kolom Role */}
+                          <TableHead>
+                            <button
+                              onClick={() => toggleSort('role')}
+                              className="group flex items-center gap-1.5 font-semibold text-foreground hover:text-primary transition-colors cursor-pointer select-none"
+                              title="Urutkan berdasarkan Role"
+                            >
+                              <span>Role</span>
+                              {renderSortIcon('role')}
+                            </button>
+                          </TableHead>
+
+                          {/* Kolom Waktu Dibuat */}
+                          <TableHead className="hidden lg:table-cell">
+                            <button
+                              onClick={() => toggleSort('createdAt')}
+                              className="group flex items-center gap-1.5 font-semibold text-foreground hover:text-primary transition-colors cursor-pointer select-none"
+                              title="Urutkan berdasarkan Waktu Dibuat"
+                            >
+                              <span>Waktu Dibuat</span>
+                              {renderSortIcon('createdAt')}
+                            </button>
+                          </TableHead>
+
+                          {/* Kolom ID */}
+                          <TableHead className="hidden md:table-cell">
+                            <button
+                              onClick={() => toggleSort('id')}
+                              className="group flex items-center gap-1.5 font-semibold text-foreground hover:text-primary transition-colors cursor-pointer select-none"
+                              title="Urutkan berdasarkan ID"
+                            >
+                              <span>ID</span>
+                              {renderSortIcon('id')}
+                            </button>
+                          </TableHead>
+
+                          <TableHead className="text-right font-semibold text-foreground">Aksi</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredUsers.length === 0 ? (
+                        {paginatedUsers.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                              {searchQuery ? 'Tidak ada pengguna yang cocok dengan pencarian.' : 'Belum ada pengguna.'}
+                            <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                              <div className="flex flex-col items-center justify-center gap-2">
+                                <AlertCircle className="h-6 w-6 text-muted-foreground/60" />
+                                <span className="text-sm">
+                                  {hasActiveFilters
+                                    ? 'Tidak ada data pengguna yang sesuai dengan kriteria pencarian atau filter.'
+                                    : 'Belum ada pengguna terdaftar di sistem.'}
+                                </span>
+                                {hasActiveFilters && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={resetTable}
+                                    className="mt-2 text-xs"
+                                  >
+                                    Reset Semua Filter
+                                  </Button>
+                                )}
+                              </div>
                             </TableCell>
                           </TableRow>
                         ) : (
-                          filteredUsers.map(user => {
+                          paginatedUsers.map(user => {
                             const isSelf = currentUser?.id === user.id;
+                            const formattedDate = user.createdAt
+                              ? new Date(user.createdAt).toLocaleString('id-ID', {
+                                  dateStyle: 'medium',
+                                  timeStyle: 'short',
+                                })
+                              : '-';
+
                             return (
                               <TableRow key={user.id}>
                                 <TableCell className="font-medium">
                                   <div className="flex items-center gap-2">
                                     <span>{user.name}</span>
                                     {isSelf && (
-                                      <Badge variant="outline" className="text-[10px] py-0">
+                                      <Badge variant="outline" className="text-[10px] py-0 border-primary text-primary">
                                         Anda
                                       </Badge>
                                     )}
@@ -738,6 +977,9 @@ export default function AdminDashboard({ initialTab = 'dashboard' }: AdminDashbo
                                   <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
                                     {user.role}
                                   </Badge>
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground hidden lg:table-cell">
+                                  {formattedDate}
                                 </TableCell>
                                 <TableCell className="font-mono text-xs text-muted-foreground hidden md:table-cell">
                                   {user.id}
@@ -773,6 +1015,27 @@ export default function AdminDashboard({ initialTab = 'dashboard' }: AdminDashbo
                         )}
                       </TableBody>
                     </Table>
+
+                    {/* ── Standarisasi Paginasi Client-Side (10, 15, 30, 50, 100) ── */}
+                    {totalFiltered > 0 && (
+                      <DataTablePagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        pageSize={pageSize}
+                        pageSizeOptions={pageSizeOptions}
+                        totalFiltered={totalFiltered}
+                        totalRaw={totalRaw}
+                        startItem={startItem}
+                        endItem={endItem}
+                        pageNumbers={pageNumbers}
+                        onPageChange={setPage}
+                        onPageSizeChange={setPageSize}
+                        onNextPage={nextPage}
+                        onPrevPage={prevPage}
+                        canNextPage={canNextPage}
+                        canPrevPage={canPrevPage}
+                      />
+                    )}
                   </div>
                 )}
               </CardContent>
