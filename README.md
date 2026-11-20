@@ -56,8 +56,8 @@ HOST=127.0.0.1
 PORT=8000
 RUST_LOG=info
 
-# CORS Configuration (Origin frontend yang diizinkan)
-CORS_ALLOWED_ORIGIN=http://localhost:5173
+# CORS Configuration (Origin frontend yang diizinkan, pisahkan koma untuk multiple origin)
+CORS_ALLOWED_ORIGIN=http://localhost:4321,http://localhost:5173,http://127.0.0.1:4321,http://127.0.0.1:5173
 
 # JWT Secret
 JWT_SECRET=super_secret_jwt_key_that_is_at_least_32_characters_long!
@@ -188,7 +188,8 @@ Setelah Aggregator berjalan di port 8000:
 
 | Layanan | URL | Keterangan |
 | :--- | :--- | :--- |
-| **Frontend Web App** | [http://127.0.0.1:5173/](http://127.0.0.1:5173/) | Dashboard Admin & Login GraphQL |
+| **Frontend Web App (Astro Dev)** | [http://localhost:4321/](http://localhost:4321/) | Dashboard Admin & Login GraphQL (Local Dev) |
+| **Frontend Web App (Docker)** | [http://127.0.0.1:5173/](http://127.0.0.1:5173/) | Dashboard Admin & Login GraphQL (Docker Nginx) |
 | **GraphQL Playground** | [http://127.0.0.1:8000/graphql](http://127.0.0.1:8000/graphql) | IDE GraphQL interaktif untuk query & mutation |
 | **Root Health/Status** | [http://127.0.0.1:8000/](http://127.0.0.1:8000/) | Status service & versi aplikasi |
 

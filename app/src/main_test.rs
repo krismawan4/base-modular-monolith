@@ -205,3 +205,63 @@ async fn test_graphql_playground_and_operations() {
     let val: Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(val["data"]["deleteUser"], true);
 }
+
+#[tokio::test]
+async fn test_cors_preflight_and_origin_headers() {
+    let auth_client = auth::build_in_memory_client();
+    let users_client = users::build_in_memory_client();
+    let jwt_secret = Arc::new("test_secret_key_that_is_at_least_32_characters_long!".to_string());
+    let blacklist = auth::build_in_memory_blacklist();
+    let system_info = Arc::new(graphql::SystemInfo::default());
+
+    let app = create_app(auth_client, users_client, jwt_secret, blacklist, system_info);
+
+    // 1. Preflight OPTIONS request from Astro frontend (http://localhost:4321)
+    let preflight_req = Request::builder()
+        .method("OPTIONS")
+        .uri("/graphql")
+        .header("origin", "http://localhost:4321")
+        .header("access-control-request-method", "POST")
+        .header("access-control-request-headers", "content-type,authorization")
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.clone().oneshot(preflight_req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(
+        res.headers().get("access-control-allow-origin").and_then(|v| v.to_str().ok()),
+        Some("http://localhost:4321")
+    );
+    assert_eq!(
+        res.headers().get("access-control-allow-credentials").and_then(|v| v.to_str().ok()),
+        Some("true")
+    );
+
+    // 2. Preflight OPTIONS request from Docker/Vite frontend (http://localhost:5173)
+    let preflight_5173 = Request::builder()
+        .method("OPTIONS")
+        .uri("/graphql")
+        .header("origin", "http://localhost:5173")
+        .header("access-control-request-method", "POST")
+        .body(Body::empty())
+        .unwrap();
+
+    let res_5173 = app.clone().oneshot(preflight_5173).await.unwrap();
+    assert_eq!(res_5173.status(), StatusCode::OK);
+    assert_eq!(
+        res_5173.headers().get("access-control-allow-origin").and_then(|v| v.to_str().ok()),
+        Some("http://localhost:5173")
+    );
+
+    // 3. Unauthorized origin should not receive allow-origin
+    let preflight_unauthorized = Request::builder()
+        .method("OPTIONS")
+        .uri("/graphql")
+        .header("origin", "http://malicious-site.com")
+        .header("access-control-request-method", "POST")
+        .body(Body::empty())
+        .unwrap();
+
+    let res_unauth = app.oneshot(preflight_unauthorized).await.unwrap();
+    assert!(res_unauth.headers().get("access-control-allow-origin").is_none());
+}

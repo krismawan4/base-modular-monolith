@@ -9,7 +9,7 @@ use axum::{
 };
 use serde_json::{json, Value};
 use sqlx::postgres::PgPoolOptions;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::trace::{DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tracing::Level;
@@ -36,14 +36,31 @@ pub fn create_app(
     _token_blacklist: auth::DynTokenBlacklist,
     system_info:      Arc<graphql::SystemInfo>,
 ) -> Router {
-    let cors_origin = std::env::var("CORS_ALLOWED_ORIGIN")
-        .unwrap_or_else(|_| "http://localhost:5173".to_string());
-    let origin_header = cors_origin
-        .parse::<HeaderValue>()
-        .unwrap_or_else(|_| HeaderValue::from_static("http://localhost:5173"));
+    let default_origins = [
+        "http://localhost:4321",
+        "http://localhost:5173",
+        "http://127.0.0.1:4321",
+        "http://127.0.0.1:5173",
+    ];
+
+    let mut origins: Vec<HeaderValue> = std::env::var("CORS_ALLOWED_ORIGIN")
+        .unwrap_or_else(|_| "http://localhost:4321,http://localhost:5173,http://127.0.0.1:4321,http://127.0.0.1:5173".to_string())
+        .split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .filter_map(|s| s.parse::<HeaderValue>().ok())
+        .collect();
+
+    for default_origin in &default_origins {
+        if let Ok(header) = default_origin.parse::<HeaderValue>() {
+            if !origins.contains(&header) {
+                origins.push(header);
+            }
+        }
+    }
 
     let cors = CorsLayer::new()
-        .allow_origin(origin_header)
+        .allow_origin(AllowOrigin::list(origins))
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
         .allow_headers([
             header::AUTHORIZATION,
