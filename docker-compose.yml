@@ -132,7 +132,7 @@ services:
     container_name: modular_frontend
     restart: unless-stopped
     ports:
-      - "5173:80"       # Web (http://localhost:5173)
+      - "4321:80"       # Web (http://localhost:4321)
     volumes:
       - ./docker/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:

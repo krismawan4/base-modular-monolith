@@ -87,7 +87,7 @@ docker compose up -d postgres redis
 ```
 
 > [!WARNING]
-> **JANGAN** menyalakan container `backend` dan `frontend` di Docker saat mode lokal, agar tidak terjadi bentrok port (*port conflict*) dengan `cargo run` (:8000) dan dev server frontend (:4321 / :5173).
+> **JANGAN** menyalakan container `backend` dan `frontend` di Docker saat mode lokal, agar tidak terjadi bentrok port (*port conflict*) dengan `cargo run` (:8000) dan dev server frontend (:4321).
 
 *(Opsional: Jika ingin melihat visualisasi log realtime di Grafana, jalankan: `docker compose up -d postgres redis loki alloy grafana`)*.
 
@@ -188,8 +188,7 @@ Setelah Aggregator berjalan di port 8000:
 
 | Layanan | URL | Keterangan |
 | :--- | :--- | :--- |
-| **Frontend Web App (Astro Dev)** | [http://localhost:4321/](http://localhost:4321/) | Dashboard Admin & Login GraphQL (Local Dev) |
-| **Frontend Web App (Docker)** | [http://127.0.0.1:5173/](http://127.0.0.1:5173/) | Dashboard Admin & Login GraphQL (Docker Nginx) |
+| **Frontend Web App** | [http://localhost:4321/](http://localhost:4321/) | Dashboard Admin & Login GraphQL (Dev / Docker) |
 | **GraphQL Playground** | [http://127.0.0.1:8000/graphql](http://127.0.0.1:8000/graphql) | IDE GraphQL interaktif untuk query & mutation |
 | **Root Health/Status** | [http://127.0.0.1:8000/](http://127.0.0.1:8000/) | Status service & versi aplikasi |
 
