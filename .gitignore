@@ -101,6 +101,7 @@ docker/alloy/data/*
 !docker/alloy/data/.gitkeep
 docker/grafana/data/*
 !docker/grafana/data/.gitkeep
+meili_data/
 *.rdb
 
 # =============================================================================

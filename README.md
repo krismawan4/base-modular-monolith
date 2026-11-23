@@ -80,10 +80,10 @@ USERS_GRPC_PORT=8001
 
 Jika Anda sedang mendevelop kode secara lokal dan ingin fitur *Hot Module Replacement* (HMR) frontend serta kompilasi cepat Rust:
 
-#### 1. Aktifkan Container Docker Pendukung (Database & Cache)
+#### 1. Aktifkan Container Docker Pendukung (Database, Cache & Search)
 Hanya aktifkan container **infrastruktur** agar data tersimpan persisten:
 ```bash
-docker compose up -d postgres redis
+docker compose up -d postgres redis meilisearch
 ```
 
 > [!WARNING]
@@ -190,6 +190,7 @@ Setelah Aggregator berjalan di port 8000:
 | :--- | :--- | :--- |
 | **Frontend Web App** | [http://localhost:4321/](http://localhost:4321/) | Dashboard Admin & Login GraphQL (Dev / Docker) |
 | **GraphQL Playground** | [http://127.0.0.1:8000/graphql](http://127.0.0.1:8000/graphql) | IDE GraphQL interaktif untuk query & mutation |
+| **Meilisearch API** | [http://127.0.0.1:7700/](http://127.0.0.1:7700/) | Search Engine HTTP API & Dashboard |
 | **Root Health/Status** | [http://127.0.0.1:8000/](http://127.0.0.1:8000/) | Status service & versi aplikasi |
 
 ---

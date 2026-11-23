@@ -54,6 +54,29 @@ services:
           cpus: "0.10"
           memory: 128M
 
+  # ── Meilisearch (Search Engine) ──────────────────────────────
+  meilisearch:
+    image: getmeili/meilisearch:v1.11
+    container_name: modular_meilisearch
+    restart: unless-stopped
+    ports:
+      - "7700:7700"
+    environment:
+      - MEILI_MASTER_KEY=kunci_rahasia_lokal_123
+      - MEILI_ENV=development
+    volumes:
+      - ./meili_data:/meili_data
+    networks:
+      - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+        reservations:
+          cpus: "0.10"
+          memory: 128M
+
   # ── Rust Backend (Axum) ──────────────────────────────────────
   backend:
     build:
